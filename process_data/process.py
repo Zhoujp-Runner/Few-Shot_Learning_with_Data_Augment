@@ -57,7 +57,7 @@ def concat_according_profile(data_origin: dict, text_list):
 
     # np.ndarray -> torch.FloatTensor
     data = torch.FloatTensor(data)
-    attribute = torch.FloatTensor(attribute)
+    attribute = torch.FloatTensor(attribute[:, :-1])
     return data, attribute
 
 
@@ -69,8 +69,8 @@ if __name__ == '__main__':
     print(data.shape)
     print(data[0])
     save_dict = dict()
-    # save_dict["data"] = data
-    # save_dict["attribute"] = attr
+    save_dict["data"] = data
+    save_dict["attribute"] = attr
     # with open(save_path, 'wb') as f:
     #     dill.dump(save_dict, f)
     # with open(save_path, 'rb') as f:

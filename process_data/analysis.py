@@ -11,6 +11,7 @@ import pandas as pd
 
 
 save_path = "..\\processed_data\\data_dict.pkl"
+save_lda_path = "..\\processed_data\\data_after_lda.pkl"
 
 
 def transform_attribute_to_label(attribute, information):
@@ -71,4 +72,9 @@ if __name__ == '__main__':
     label = transform_attribute_to_label(attribute, information)
     source_data = data['data']
     data_af_lda = lda(source_data, label)
+    data_dict_af_lda = dict()
+    data_dict_af_lda['data'] = data_af_lda
+    data_dict_af_lda['attribute'] = attribute
     print(data_af_lda.shape)
+    with open(save_lda_path, 'wb') as f_lda:
+        dill.dump(data_dict_af_lda, f_lda)

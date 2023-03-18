@@ -9,63 +9,15 @@
     2）根据beta计算出alpha_bar等一系列参数
     3）扩散过程
 """
+import time
+
 import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-
-
-class MLPModel(nn.Module):
-    def __init__(self, input_dim, num_steps):
-        super(MLPModel, self).__init__()
-        # 网络的线性层
-        self.linear_layers = nn.ModuleList(
-            [
-                nn.Linear(input_dim, 128),
-                nn.ReLU(),
-                nn.Linear(128, 256),
-                nn.ReLU(),
-                nn.Linear(256, 128),
-                nn.ReLU(),
-                nn.Linear(128, input_dim)
-            ]
-        )
-        # 时间embedding层
-        self.time_embeddings = nn.ModuleList(
-            [
-                nn.Embedding(num_steps, 128),
-                nn.Embedding(num_steps, 256),
-                nn.Embedding(num_steps, 128)
-            ]
-        )
-        # TODO 属性linear层,先不加激活函数
-        self.attribute_embedding_linear = nn.ModuleList(
-            [
-                nn.Linear(4, 128),
-                nn.Linear(4, 256),
-                nn.Linear(4, 128)
-            ]
-        )
-
-    def forward(self, x, t, attribute):
-        """
-        这里没有考虑好将attribute和哪个做拼接，先单独做一个linear层出来
-        后续看一下AC-GAN里是怎么操作的
-        :param x: [batch_size, dim]
-        :param t: [batch_size, 1]
-        :param attribute: [batch_size. attribute_dim] 注意这里的attribute_dim的维度为4，不考虑第五个维度
-        :return: [batch_size, dim]
-        """
-        for idx, embedding in enumerate(self.time_embeddings):
-            t_embedding = embedding(t)  # [batch_size, 1, hidden_dim]
-            t_embedding = t_embedding.squeeze(1)  # [batch_size, hidden_dim]
-            att_embedding = self.attribute_embedding_linear[idx](attribute)  # [batch_size, 1, hidden_dim]
-            att_embedding = att_embedding.squeeze(1)  # [batch_size, hidden_dim]
-            x = self.linear_layers[2 * idx](x)  # [batch_size, hidden_dim]
-            x = x + t_embedding + att_embedding  # [batch_size, hidden_dim]
-            x = self.linear_layers[2 * idx + 1](x)  # [batch_size, hidden_dim]
-        x = self.linear_layers[-1](x)  # [batch_size, hidden_dim]
-        return x  # [batch_size, hidden_dim]
+from torch.utils.data import DataLoader
+from process_data.dataset import FaultDataset
+from model import MLPModel
 
 
 class DiffusionModel(object):
@@ -73,16 +25,22 @@ class DiffusionModel(object):
                  num_diffusion_steps,
                  beta_start=0.0001,
                  beta_end=0.02,
-                 attribute=None):
+                 epoches=100,
+                 batch_size=128,
+                 learning_rate=1e-3,
+                 device='cpu'):
         super(DiffusionModel, self).__init__()
         self.num_diffusion_steps = num_diffusion_steps
         self.beta_start = beta_start
         self.beta_end = beta_end
 
-        self.attribute = attribute  # 数据的属性值
-
         self._get_bata_schedule()
         self._get_parameters_related_to_alpha_bar()
+
+        self.device = device
+        self.batch_size=batch_size
+        self.lr = learning_rate
+        self.epoches = epoches
 
     def _get_bata_schedule(self):
         """
@@ -94,8 +52,6 @@ class DiffusionModel(object):
         self.betas = np.linspace(
             beta_start, beta_end, self.num_diffusion_steps, dtype=np.float64
         )
-        print(self.betas)
-        print(len(self.betas.shape))
 
     def _get_parameters_related_to_alpha_bar(self):
         """
@@ -118,20 +74,22 @@ class DiffusionModel(object):
     def sample_from_posterior(self,
                               model: MLPModel,
                               x_t,
-                              t):
+                              t,
+                              attribute=None):
         """
         根据后验分布，以及t时刻神经网络模型p的预测值，得到t-1时刻的数据分布并采样
         即 q(x_t-1 | x_t, x_0)
         :param model: 神经网络模型
         :param x_t: 第t时刻的数据 [batch_size, dim]
         :param t: 时间步 [batch_size, 1]
+        :param attribute: 属性矩阵
         :return:
         """
         # 高斯噪声采样
         noise = torch.randn_like(x_t)
 
         # 模型输出
-        model_out = model(x_t, t, self.attribute)
+        model_out = model(x_t, t, attribute)
 
         # 计算均值
         coefficient1 = 1.0 / torch.from_numpy(self.sqrt_alphas)[t].float()
@@ -180,21 +138,78 @@ class DiffusionModel(object):
 
         return x_t
 
-    def diffusion_at_time_t(self, x_0: torch.Tensor, t):
+    def diffusion_at_time_t(self,
+                            x_0: torch.Tensor,
+                            t,
+                            noise):
         """
         扩散过程，获得第t步的数据
         即q(x_t | x_0)
         :param x_0: 初始数据
         :param t: 时间步t
+        :param noise: 噪声
         :return: 第t步的数据
         """
-        noise = torch.randn_like(x_0)
 
         # 计算均值与标准差
-        mean = torch.from_numpy(self.sqrt_alphas_cumprod)[t].float() * x_0
-        standard_deviation = torch.from_numpy(self.sqrt_one_minus_alphas_cumprod)[t].float()
+        mean_coefficient = torch.from_numpy(self.sqrt_alphas_cumprod)[t].float().to(self.device)
+        mean = mean_coefficient * x_0
+        standard_deviation = torch.from_numpy(self.sqrt_one_minus_alphas_cumprod)[t].float().to(self.device)
 
-        return mean + standard_deviation * noise
+        return (mean + standard_deviation * noise).float()
+
+    def loss_fn(self,
+                model,
+                x_0: torch.Tensor,
+                attribute=None):
+        """目标函数"""
+        # 对t进行采样
+        batch_size = x_0.shape[0]
+        t = self.sample_t(batch_size)
+
+        # 通过扩散过程生成t时刻的数据
+        noise = torch.randn_like(x_0)
+        x_t = self.diffusion_at_time_t(x_0, t, noise)
+
+        # 模型前向传播
+        model_out = model(x_t, t, attribute)
+
+        return torch.mean(torch.square((noise - model_out)))
+
+    def sample_t(self, batch_size):
+        """对时间步t进行均匀采样"""
+        weight = np.ones([self.num_diffusion_steps])  # 由于均匀采样，所以每个时间步的权重都为1
+        p = weight / np.sum(weight)  # 计算每个时间步的采样概率
+        time_sample_np = np.random.choice(self.num_diffusion_steps, size=(batch_size,), p=p)  # 以概率p对时间步采样
+        time_sample = torch.from_numpy(time_sample_np).long()  # [batch_size]
+        time_sample = time_sample.unsqueeze(-1).to(self.device)  # [batch_size, 1]
+        return time_sample
+
+    def train(self,
+              dataset,
+              model: MLPModel):
+        """训练模型"""
+        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+
+        model = model.to(self.device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
+
+        for epoch in range(self.epoches):
+            loss_total = 0
+            pb_dataloader = tqdm(dataloader, desc=f"Epoch {epoch}: ")
+            for batch in pb_dataloader:
+                x_0, attribute = batch
+                x_0 = x_0.to(self.device)
+                if attribute is not None:
+                    attribute = attribute.to(self.device)
+                loss = self.loss_fn(model, x_0)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                pb_dataloader.set_postfix_str(f"Loss = {loss.item()}")
+                # loss_total += loss.item()
+            # tqdm.write(f"Total_Loss is {loss_total}")
 
 
 if __name__ == '__main__':
@@ -205,7 +220,11 @@ if __name__ == '__main__':
     # x = model(input, time, att)
     # print(x.shape)
     # x = torch.rand((64, 64))
-    # dif = DiffusionModel(num_diffusion_steps=100)
+    dif = DiffusionModel(num_diffusion_steps=3000)
     # print(dif.diffusion_at_time_t(x, 10).shape)
-    indi = list(range(100))[::-1]
-    print(indi)
+    dataset = FaultDataset()
+    model = MLPModel(64, 3000)
+    dif.train(dataset, model)
+
+    # indi = list(range(100))[::-1]
+    # print(indi)

@@ -12,14 +12,15 @@ import dill
 
 
 save_path = "..\\processed_data\\data_dict.pkl"
+save_lda_path = "..\\processed_data\\data_after_lda.pkl"
 
 
 class FaultDataset(Dataset):
     def __init__(self):
         super(FaultDataset, self).__init__()
-        if not os.path.exists(save_path):
-            raise OSError(f"There is not a existed path. Error path: {save_path}")
-        with open(save_path, 'rb') as f:
+        if not os.path.exists(save_lda_path):
+            raise OSError(f"There is not a existed path. Error path: {save_lda_path}")
+        with open(save_lda_path, 'rb') as f:
             self.source_data = dill.load(f)
         self.data = self.source_data["data"]
         self.attribute = self.source_data["attribute"]

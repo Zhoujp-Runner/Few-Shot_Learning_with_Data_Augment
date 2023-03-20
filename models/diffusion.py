@@ -18,6 +18,14 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from process_data.dataset import FaultDataset
 from model import MLPModel
+import yaml
+from easydict import EasyDict
+
+
+with open("..\\configs\\config_0.yaml") as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+
+config = EasyDict(config)
 
 
 class DiffusionModel(object):
@@ -222,7 +230,7 @@ if __name__ == '__main__':
     # x = torch.rand((64, 64))
     dif = DiffusionModel(num_diffusion_steps=3000)
     # print(dif.diffusion_at_time_t(x, 10).shape)
-    dataset = FaultDataset()
+    dataset = FaultDataset(config)
     model = MLPModel(64, 3000)
     dif.train(dataset, model)
 

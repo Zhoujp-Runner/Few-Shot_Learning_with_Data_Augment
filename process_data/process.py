@@ -14,9 +14,19 @@ import pandas as pd
 import dill
 import torch
 
-dataset_root_path = "..\\dataset"
-text_list = ["CE", "CP", "profile"]
-save_path = "..\\processed_data\\data_dict.pkl"
+import yaml
+from easydict import EasyDict
+
+from analysis import dim_decay
+
+# dataset_root_path = "..\\dataset"
+# text_list = ["CE", "CP", "profile"]
+# save_path = "..\\processed_data\\data_dict.pkl"
+
+with open("..\\configs\\config_0.yaml") as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+
+config = EasyDict(config)
 
 
 def read_from_txt(text_list, dataset_root_path):
@@ -55,25 +65,55 @@ def concat_according_profile(data_origin: dict, text_list):
     # pd_data = pd.DataFrame(data, index=index, columns=None)
     attribute = data_origin["profile"].values
 
-    # np.ndarray -> torch.FloatTensor
-    data = torch.FloatTensor(data)
-    attribute = torch.FloatTensor(attribute[:, :-1])
+    # # np.ndarray -> torch.FloatTensor
+    # data = torch.FloatTensor(data)
+    # attribute = torch.FloatTensor(attribute[:, :-1])
     return data, attribute
 
 
+def process(config):
+    """对数据进行预处理"""
+    # 加载参数
+    text_list = config.text_list
+    dataset_root_path = config.dataset_root_path
+    information = config.information
+    save_path = config.save_path
+    save_lda_path = config.save_lda_path
+
+    # 初步处理
+    source_data_dict = read_from_txt(text_list, dataset_root_path)
+    data, attribute = concat_according_profile(source_data_dict, text_list)
+    data_dict = {
+        "data": data,
+        "attribute": attribute[:, :-1]
+    }
+
+    # lda 降维
+    data_dict_after_lda = dim_decay(data_dict, information)
+
+    # 保存数据
+    print(data_dict["data"].shape)
+    print(data_dict_after_lda["data"].shape)
+    with open(save_path, 'wb') as f:
+        dill.dump(data_dict, f)
+    with open(save_lda_path, 'wb') as f:
+        dill.dump(data_dict_after_lda, f)
+
+
 if __name__ == '__main__':
-    origin_data = read_from_txt(text_list, dataset_root_path)
-    print(origin_data["CE"].values[0])
-    print(origin_data["CP"].values[0])
-    data, attr = concat_according_profile(origin_data, text_list)
-    print(data.shape)
-    print(data[0])
-    save_dict = dict()
-    save_dict["data"] = data
-    save_dict["attribute"] = attr
-    # with open(save_path, 'wb') as f:
-    #     dill.dump(save_dict, f)
-    # with open(save_path, 'rb') as f:
-    #     save_dict = dill.load(f)
-    # print(save_dict)
-    # print(attr)
+    # origin_data = read_from_txt(text_list, dataset_root_path)
+    # print(origin_data["CE"].values[0])
+    # print(origin_data["CP"].values[0])
+    # data, attr = concat_according_profile(origin_data, text_list)
+    # print(data.shape)
+    # print(data[0])
+    # save_dict = dict()
+    # save_dict["data"] = data
+    # save_dict["attribute"] = attr
+    # # with open(save_path, 'wb') as f:
+    # #     dill.dump(save_dict, f)
+    # # with open(save_path, 'rb') as f:
+    # #     save_dict = dill.load(f)
+    # # print(save_dict)
+    # # print(attr)
+    process(config)

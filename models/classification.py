@@ -7,6 +7,15 @@
 import numpy as np
 import pandas as pd
 from collections import Counter
+from process_data.dataset import FaultDataset
+import yaml
+from easydict import EasyDict
+
+
+with open("..\\configs\\config_0.yaml") as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+
+config = EasyDict(config)
 
 
 class KNN(object):
@@ -42,7 +51,7 @@ class KNN(object):
             # TODO 有待优化，如果第k个和第k+1个数值相同，那么k+1就会被舍弃
             item_sort = item[np.argsort(item[:, 0])]
             voter = item_sort[:self.k + 1, 1:]
-            # TODO 有待优化，count返回出来的结果可能shape不一定
+            # TODO 有待优化，count当有两个票数相同的标签时只返回一个
             label = self.count(voter)
             result.append(label)
         result = np.reshape(result, (batch_size, 4))
@@ -70,17 +79,39 @@ class KNN(object):
         max_label = []
         for key, value in count_dict.items():
             if value == max(count_dict.values()):
-                max_label.append(key)
+                max_label.append(list(key))
+                break
 
         return max_label
+
+    def count_accuracy(self,
+                       prediction: np.ndarray,
+                       ground_truth: np.ndarray):
+        mask = prediction == ground_truth
+        result = [1 if np.all(item) else 0 for item in mask]
+        accuracy = np.sum(result) / len(test_label)
+        return accuracy
+
+    def run(self,
+            test_data: np.ndarray,
+            test_label: np.ndarray):
+        predition = self.classify(test_data)
+        accuracy = self.count_accuracy(predition, test_label)
+        return accuracy
 
 
 if __name__ == '__main__':
     da = np.array([[4, 4, 4], [3, 3, 3], [4, 4, 4], [4, 4, 4]])
     x_in = np.array([[2, 2, 2], [1, 1, 1]])
     la = np.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3], [3, 3, 3, 3]])
-    knn = KNN(da, la, k=4)
-    print(knn.classify(x_in))
+    dataset = FaultDataset(config)
+    train_data = dataset.train_data.numpy()
+    label = dataset.train_attribute.numpy()
+    knn = KNN(train_data, label, k=5)
+    test_data = dataset.test_data.numpy()
+    test_label = dataset.test_attribute.numpy()
+    print(knn.run(test_data, test_label))
+
     # x_in = x_in[:, None, :]
     # dif = da - x_in
     # dis = np.sum(dif, axis=2, keepdims=True)
@@ -90,13 +121,13 @@ if __name__ == '__main__':
     # dic[(1, 2 , 3)] = 1
     # print(dic)
     # for i in dis:
-        # pd_i = np.concatenate([i, la], axis=1)
-        # pd_i = pd.DataFrame(pd_i, index=None, columns=None)
-        # print(pd_i)
-
-        # pd_i.sort_values(by=0, axis=1)
-        # pdi_sort = pd_i[np.argsort(pd_i[:, 0])]
-        # vote = pdi_sort[:2, 1:]
-        # label = KNN.count(vote)
-        # print(vote)
-        # print(label)
+    #     pd_i = np.concatenate([i, la], axis=1)
+    #     pd_i = pd.DataFrame(pd_i, index=None, columns=None)
+    #     print(pd_i)
+    #
+    #     pd_i.sort_values(by=0, axis=1)
+    #     pdi_sort = pd_i[np.argsort(pd_i[:, 0])]
+    #     vote = pdi_sort[:2, 1:]
+    #     label = KNN.count(vote)
+    #     print(vote)
+    #     print(label)

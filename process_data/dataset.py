@@ -8,6 +8,7 @@
 """
 import os
 import numpy as np
+import torch
 from torch.utils.data.dataset import Dataset
 import dill
 import yaml
@@ -46,7 +47,6 @@ class FaultDataset(Dataset):
         self.data = self.source_data["data"]
         self.attribute = self.source_data["attribute"]
         self.information = config.information
-        print(self.attribute)
 
         self.mode = mode
         self.with_test = with_test
@@ -54,6 +54,7 @@ class FaultDataset(Dataset):
         self.train_attribute = None
         self.test_data = None
         self.test_attribute = None
+        self.classes = []
 
         self.divide_data()
 
@@ -70,6 +71,7 @@ class FaultDataset(Dataset):
         # 提取出每一类的第一个样本的索引值
         # TODO 提取方法有待改进，两个循环的暴力搜索的时间复杂度有点高
         for item in att_iter:
+            self.classes.append(list(item))
             for idx, att in enumerate(self.attribute):
                 att = tuple(att)
                 if item == att:
@@ -83,6 +85,13 @@ class FaultDataset(Dataset):
         self.test_attribute = attribute[indices]
         self.train_data = np.delete(data, indices, axis=0)
         self.train_attribute = np.delete(attribute, indices, axis=0)
+
+        # np.ndarray -> torch.FloatTensor
+        self.data = torch.FloatTensor(self.data)
+        self.train_data = torch.FloatTensor(self.train_data)
+        self.train_attribute = torch.FloatTensor(self.train_attribute)
+        self.test_data = torch.FloatTensor(self.test_data)
+        self.test_attribute = torch.FloatTensor(self.test_attribute)
 
     @property
     def _get_len(self):
@@ -108,9 +117,12 @@ class FaultDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = FaultDataset(config)
-    print(dataset.__getitem__(1))
-    print(dataset.__len__())
+    dataset = FaultDataset(config, mode='test')
+    # print(dataset.__getitem__(1))
+    # print(dataset.__len__())
+    # print(dataset.test_data)
+    # print(dataset.test_attribute)
+    print(dataset.classes)
     # indices = [1, 2, 3, 5]
     # test = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7]]
     # test = np.array(test)

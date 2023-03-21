@@ -9,6 +9,7 @@
     2）根据beta计算出alpha_bar等一系列参数
     3）扩散过程
 """
+import os.path
 import time
 
 import numpy as np
@@ -20,6 +21,7 @@ from process_data.dataset import FaultDataset
 from model import MLPModel
 import yaml
 from easydict import EasyDict
+import logging
 
 
 with open("..\\configs\\config_0.yaml") as f:
@@ -29,26 +31,36 @@ config = EasyDict(config)
 
 
 class DiffusionModel(object):
-    def __init__(self,
-                 num_diffusion_steps,
-                 beta_start=0.0001,
-                 beta_end=0.02,
-                 epoches=100,
-                 batch_size=128,
-                 learning_rate=1e-3,
-                 device='cpu'):
+    def __init__(self, config):
         super(DiffusionModel, self).__init__()
-        self.num_diffusion_steps = num_diffusion_steps
-        self.beta_start = beta_start
-        self.beta_end = beta_end
+        self.config = config
+        self.num_diffusion_steps = config.num_diffusion_steps
+        self.beta_start = config.beta_start
+        self.beta_end = config.beta_end
 
         self._get_bata_schedule()
         self._get_parameters_related_to_alpha_bar()
+        self._set_log()
 
-        self.device = device
-        self.batch_size=batch_size
-        self.lr = learning_rate
-        self.epoches = epoches
+        self.checkpoint_interval = config.checkpoint_interval
+        self.device = config.device
+        self.batch_size = config.batch_size
+        self.lr = float(config.learning_rate)
+        self.epochs = config.epochs
+
+    def _set_log(self):
+        """设置log文件"""
+        self.logger = logging.getLogger("DiffusionLog")
+        self.logger.setLevel(logging.DEBUG)
+
+        self.filehandle = logging.FileHandler(self.config.save_log_path)
+        self.filehandle.setLevel(logging.DEBUG)
+
+        fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        self.formatter = logging.Formatter(fmt)
+
+        self.filehandle.setFormatter(self.formatter)
+        self.logger.addHandler(self.filehandle)
 
     def _get_bata_schedule(self):
         """
@@ -202,22 +214,35 @@ class DiffusionModel(object):
         model = model.to(self.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
 
-        for epoch in range(self.epoches):
+        for epoch in range(self.epochs):
             loss_total = 0
             pb_dataloader = tqdm(dataloader, desc=f"Epoch {epoch}: ")
-            for batch in pb_dataloader:
-                x_0, attribute = batch
+            for x_0, attribute in pb_dataloader:
                 x_0 = x_0.to(self.device)
-                if attribute is not None:
-                    attribute = attribute.to(self.device)
-                loss = self.loss_fn(model, x_0)
+                attribute = attribute.to(self.device)
+
+                loss = self.loss_fn(model, x_0, attribute)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
                 pb_dataloader.set_postfix_str(f"Loss = {loss.item()}")
-                # loss_total += loss.item()
-            # tqdm.write(f"Total_Loss is {loss_total}")
+                loss_total += loss.item()
+
+            loss_mean = loss_total / len(dataloader)
+            log_message = f"Epoch{epoch}: Loss = {loss_mean}"
+            self.logger.info(log_message)
+
+            # 每隔10个周期保存一次模型
+            if (epoch+1) % self.checkpoint_interval == 0:
+                checkpoint = {
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "epoch": epoch
+                }
+                model_name = f"epoch{epoch}_checkpoint.pkl"
+                save_model_path = os.path.join(config.save_model_root_path, model_name)
+                torch.save(checkpoint, save_model_path)
 
 
 if __name__ == '__main__':
@@ -228,7 +253,7 @@ if __name__ == '__main__':
     # x = model(input, time, att)
     # print(x.shape)
     # x = torch.rand((64, 64))
-    dif = DiffusionModel(num_diffusion_steps=3000)
+    dif = DiffusionModel(config)
     # print(dif.diffusion_at_time_t(x, 10).shape)
     dataset = FaultDataset(config)
     model = MLPModel(64, 3000)

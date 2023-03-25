@@ -4,12 +4,21 @@
 """
 1.KNN算法
 """
+import os.path
+
 import numpy as np
+import torch
 import pandas as pd
 from collections import Counter
 from process_data.dataset import FaultDataset
 import yaml
 from easydict import EasyDict
+from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import dill
+
+from process_data.analysis import transform_attribute_to_label
 
 
 with open("..\\configs\\config_0.yaml") as f:
@@ -89,7 +98,7 @@ class KNN(object):
                        ground_truth: np.ndarray):
         mask = prediction == ground_truth
         result = [1 if np.all(item) else 0 for item in mask]
-        accuracy = np.sum(result) / len(test_label)
+        accuracy = np.sum(result) / len(ground_truth)
         return accuracy
 
     def run(self,
@@ -100,17 +109,105 @@ class KNN(object):
         return accuracy
 
 
+class MLPClassification(nn.Module):
+    def __init__(self):
+        super(MLPClassification, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 144)
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+def train(data_set):
+    epochs = 100
+
+    dataloader = DataLoader(data_set, batch_size=128, shuffle=True)
+
+    device = 'cpu'
+    model = MLPClassification()
+    model = model.to(device)
+
+    loss_func = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-3)
+
+    for epoch in range(epochs):
+        total_loss = 0
+        pb_dataloader = tqdm(dataloader, desc=f"Epoch{epoch}: ")
+        for data, attribute in pb_dataloader:
+            data = data.to(device)
+            attribute = attribute.to(device)
+
+            out = model(data)
+            loss = loss_func(out, attribute)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            pb_dataloader.set_postfix_str(f"Loss = {loss.item()}")
+            total_loss += loss.item()
+
+        loss_for_epoch = total_loss / len(dataloader)
+        # 保存模型
+        if (epoch + 1) % 10 == 0:
+            save_name = f'pca_1_shots_epoch{epoch}_loss{loss_for_epoch}_mlp_dict.pkl'
+            save_root = '..\\experiments\\classifications\\MLP'
+            save_path = os.path.join(save_root, save_name)
+            model_dict = {
+                "state_dict": model.state_dict(),
+                "optimizer": optimizer.state_dict()
+            }
+            with open(save_path, 'wb') as f:
+                dill.dump(model_dict, f)
+
+
+def test(data_set):
+    data = data_set.test_data  # [batch_size, 64]
+    labels = data_set.test_attribute  # [batch_size, 144]
+    model = MLPClassification()
+    load_path = "..\\experiments\\classifications\\MLP\\pca_1_shots_epoch99_loss2.221052050590515_mlp_dict.pkl"
+    with open(load_path, 'rb') as f:
+        model_dict = dill.load(f)
+    model.load_state_dict(model_dict["state_dict"])
+    out = model(data)  # [batch_size, 144]
+    values, indices = torch.max(out, dim=1, out=None)
+    accuracy = torch.sum(indices == labels) / len(dataset.test_attribute)
+    print(accuracy)
+
+
 if __name__ == '__main__':
     da = np.array([[4, 4, 4], [3, 3, 3], [4, 4, 4], [4, 4, 4]])
     x_in = np.array([[2, 2, 2], [1, 1, 1]])
     la = np.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3], [3, 3, 3, 3]])
-    dataset = FaultDataset(config)
-    train_data = dataset.train_data.numpy()
-    label = dataset.train_attribute.numpy()
-    knn = KNN(train_data, label, k=5)
-    test_data = dataset.test_data.numpy()
-    test_label = dataset.test_attribute.numpy()
-    print(knn.run(test_data, test_label))
+    dataset = FaultDataset(config, dim_decay_method='PCA')
+    # # KNN
+    # train_data = dataset.train_data.numpy()
+    # label = dataset.train_attribute.numpy()
+    # knn = KNN(train_data, label, k=5)
+    # test_data = dataset.test_data.numpy()
+    # test_label = dataset.test_attribute.numpy()
+    # print(knn.run(test_data, test_label))
+
+    # # MLP train
+    # label_1d = transform_attribute_to_label(dataset.train_attribute, config.information)
+    # label_list = []
+    # for idx in label_1d:
+    #     label = torch.zeros((1, 144))
+    #     idx = int(idx.item())
+    #     label[0][idx] = 1
+    #     label_list.append(label)
+    # label = torch.cat(label_list, dim=0)
+    # dataset.train_attribute = torch.FloatTensor(label)
+    # train(dataset)
+    # MLP test
+    label_1d_test = transform_attribute_to_label(dataset.test_attribute, config.information)
+    dataset.test_attribute = torch.FloatTensor(label_1d_test)
+    test(dataset)
 
     # x_in = x_in[:, None, :]
     # dif = da - x_in

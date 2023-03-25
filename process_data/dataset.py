@@ -22,14 +22,11 @@ with open("..\\configs\\config_0.yaml") as f:
 config = EasyDict(config)
 
 
-save_path = "..\\processed_data\\data_dict.pkl"
-save_lda_path = "..\\processed_data\\data_after_lda.pkl"
-
-
 class FaultDataset(Dataset):
     def __init__(self,
                  config,
                  mode='train',
+                 dim_decay_method='LDA',
                  with_test=False):
         """
         :param config: config文件
@@ -38,7 +35,13 @@ class FaultDataset(Dataset):
         """
         super(FaultDataset, self).__init__()
 
-        self.data_path = config.save_lda_path
+        if dim_decay_method == 'LDA':
+            self.data_path = config.save_lda_path
+        elif dim_decay_method == 'PCA':
+            self.data_path = config.save_pca_path
+        else:
+            raise ValueError("There is no such method for dim_decay!")
+
         if not os.path.exists(self.data_path):
             raise OSError(f"There is not a existed path. Error path: {self.data_path}")
         with open(self.data_path, 'rb') as f:
@@ -56,6 +59,11 @@ class FaultDataset(Dataset):
         self.test_attribute = None
         self.classes = []
 
+        self.shots_num = config.shots_num
+        if self.shots_num > 9:  # 对于当前所用的数据集来说，每一个类别最小的样本数量为10，所以num_shots应该小于等于9
+            raise ValueError(
+                "shots_num must be equal or less than 9 for hydraulic systems dataset, please modify the config!"
+            )
         self.divide_data()
 
     def divide_data(self):
@@ -63,28 +71,40 @@ class FaultDataset(Dataset):
         将source_data中的数据分成train, test两部分
         将某一个类别的第一个样本划分为测试集
         即测试集中每个类别只有一个样本
+        将某一类别的除了第一个数据的后num个数据划分为训练集
+        其中，num的取值为self.shots_num， 在config文件中定义
         """
         cooler, valve, pump, hydraulic = self.information
         att_iter = product(cooler, valve, pump, hydraulic)
 
-        indices = []
+        test_indices = []
+        train_indices = []
         # 提取出每一类的第一个样本的索引值
         # TODO 提取方法有待改进，两个循环的暴力搜索的时间复杂度有点高
-        for item in att_iter:
+        # TODO 这样子切割使得训练集与测试集完全固定，被筛选掉的样本永远也不会参与计算，可以改成每次创建dataset都是不同的
+        for item in att_iter:  # 遍历每一个类别
+            num = 0  # 用来计数提取的属性个数
             self.classes.append(list(item))
-            for idx, att in enumerate(self.attribute):
+            for idx, att in enumerate(self.attribute):  # 遍历每一个属性
                 att = tuple(att)
-                if item == att:
-                    indices.append(idx)
+                if num == self.shots_num + 1:  # 如果已经提取完对应的样本数量就退出循环
                     break
+                if item == att and num != 0:  # 提取完第一个样本后
+                    train_indices.append(idx)
+                    num += 1
+                elif item == att and num == 0:  # 未提取第一个样本
+                    test_indices.append(idx)
+                    num += 1
 
         # 拷贝，防止由于test的改变而导致原数据改变
         data = np.copy(self.data)
         attribute = np.copy(self.attribute)
-        self.test_data = data[indices]
-        self.test_attribute = attribute[indices]
-        self.train_data = np.delete(data, indices, axis=0)
-        self.train_attribute = np.delete(attribute, indices, axis=0)
+        self.test_data = data[test_indices]
+        self.test_attribute = attribute[test_indices]
+        self.train_data = data[train_indices]
+        self.train_attribute = attribute[train_indices]
+        # self.train_data = np.delete(data, test_indices, axis=0)
+        # self.train_attribute = np.delete(attribute, test_indices, axis=0)
 
         # np.ndarray -> torch.FloatTensor
         self.data = torch.FloatTensor(self.data)
@@ -122,7 +142,10 @@ if __name__ == '__main__':
     # print(dataset.__len__())
     # print(dataset.test_data)
     # print(dataset.test_attribute)
-    print(dataset.classes)
+    print(dataset.train_data.shape)
+    print(dataset.train_attribute.shape)
+    print(dataset.test_data == dataset.train_data)
+    # print(dataset.classes)
     # indices = [1, 2, 3, 5]
     # test = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7]]
     # test = np.array(test)

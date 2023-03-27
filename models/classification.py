@@ -155,7 +155,7 @@ def train(data_set):
         loss_for_epoch = total_loss / len(dataloader)
         # 保存模型
         if (epoch + 1) % 10 == 0:
-            save_name = f'pca_1_shots_epoch{epoch}_loss{loss_for_epoch}_mlp_dict.pkl'
+            save_name = f'pca_5_shots_augment_ConcatLinear_epoch{epoch}_loss{loss_for_epoch}.pkl'
             save_root = '..\\experiments\\classifications\\MLP'
             save_path = os.path.join(save_root, save_name)
             model_dict = {
@@ -170,7 +170,7 @@ def test(data_set):
     data = data_set.test_data  # [batch_size, 64]
     labels = data_set.test_attribute  # [batch_size, 144]
     model = MLPClassification()
-    load_path = "..\\experiments\\classifications\\MLP\\pca_1_shots_epoch99_loss2.221052050590515_mlp_dict.pkl"
+    load_path = "..\\experiments\\classifications\\MLP\\pca_5_shots_augment_ConcatLinear_epoch99_loss1.231703862923534.pkl"
     with open(load_path, 'rb') as f:
         model_dict = dill.load(f)
     model.load_state_dict(model_dict["state_dict"])
@@ -184,7 +184,7 @@ if __name__ == '__main__':
     da = np.array([[4, 4, 4], [3, 3, 3], [4, 4, 4], [4, 4, 4]])
     x_in = np.array([[2, 2, 2], [1, 1, 1]])
     la = np.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3], [3, 3, 3, 3]])
-    dataset = FaultDataset(config, dim_decay_method='PCA')
+    dataset = FaultDataset(config, method='PCA', augment=True)
     # # KNN
     # train_data = dataset.train_data.numpy()
     # label = dataset.train_attribute.numpy()

@@ -18,7 +18,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from process_data.dataset import FaultDataset
-from model import MLPModel
+from models.model import MLPModel, ConcatModel
 import yaml
 from easydict import EasyDict
 import logging
@@ -47,6 +47,8 @@ class DiffusionModel(object):
         self.batch_size = config.batch_size
         self.lr = float(config.learning_rate)
         self.epochs = config.epochs
+
+        self.sample_list = None  # 用于存放逆扩散过程每一步的采样结果
 
     def _set_log(self):
         """设置log文件"""
@@ -128,32 +130,35 @@ class DiffusionModel(object):
 
     def sample_loop(self,
                     model: MLPModel,
-                    shape):
+                    shape,
+                    attribute=None):
         """
         循环采样，逆扩散过程
         x_t -> x_t-1 -> x_t-2 -> ... -> x_0
         :param model: 神经网络模型
         :param shape: 待生成的样本的形状
-        :return: 整个逆扩散过程的采样结果的list
+        :return: 生成的样本，即x_0
         """
         # 生成最初的噪声
         x_t = torch.randn(shape)
 
         # 反时间步 [T, T-1, T-2, ..., 0]
         time_steps = list(range(self.num_diffusion_steps))[::-1]
-        time_steps = tqdm(time_steps)
+        time_steps = tqdm(time_steps, desc=f"attribute{attribute}:")
 
         # 用于存放每一步的采样结果
-        x_sample = [x_t]
+        self.sample_list = [x_t]
 
         # 进行循环采样，当前步的输出作为下一步的输入
         for t in time_steps:
-            t = torch.tensor([t] * shape[0])
+            t = torch.tensor([t] * shape[0])  # [batch_size]
+            t = t.unsqueeze(1)  # [batch_size, 1] 这里是为了采样的系数矩阵的维度符合广播机制
             with torch.no_grad():
                 x_t_minus_1 = self.sample_from_posterior(model,
                                                          x_t,
-                                                         t)
-                x_sample.append(x_t_minus_1)
+                                                         t,
+                                                         attribute)
+                self.sample_list.append(x_t_minus_1)
                 x_t = x_t_minus_1
 
         return x_t
@@ -207,8 +212,16 @@ class DiffusionModel(object):
 
     def train(self,
               dataset,
-              model: MLPModel):
+              model):
         """训练模型"""
+        # 记录模型的结构以及一些参数
+        self.logger.info(model)
+        self.logger.info(f"Batch_size: {self.batch_size}")
+        self.logger.info(f"diffusion_step: {self.num_diffusion_steps}")
+        self.logger.info(f"learning_rate: {self.lr}")
+        self.logger.info(f"K-shots: k={config.shots_num}")
+        self.logger.info(f"epochs: {self.epochs}")
+
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
         model = model.to(self.device)
@@ -237,11 +250,11 @@ class DiffusionModel(object):
             if (epoch+1) % self.checkpoint_interval == 0:
                 checkpoint = {
                     "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "epoch": epoch
+                    "optimizer_state_dict": optimizer.state_dict()
                 }
+                sub_dir_name = "concat_linear3"
                 model_name = f"epoch{epoch}_checkpoint.pkl"
-                save_model_path = os.path.join(config.save_model_root_path, model_name)
+                save_model_path = os.path.join(config.save_model_root_path, model.type, sub_dir_name, model_name)
                 torch.save(checkpoint, save_model_path)
 
 
@@ -257,7 +270,8 @@ if __name__ == '__main__':
     # print(dif.diffusion_at_time_t(x, 10).shape)
     dataset = FaultDataset(config)
     model = MLPModel(64, 3000)
-    dif.train(dataset, model)
+    concat_model = ConcatModel(dim_condition=4)
+    dif.train(dataset, concat_model)
 
     # indi = list(range(100))[::-1]
     # print(indi)

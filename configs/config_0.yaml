@@ -21,13 +21,16 @@ text_list : ["PS1",
 save_path : "..\\processed_data\\data_dict.pkl"
 save_lda_path : "..\\processed_data\\data_after_lda.pkl"
 save_pca_path : "..\\processed_data\\data_after_pca.pkl"
-shots_num : 1
+save_augment_root : "..\\processed_data"
+augment_num : 100
+dataset_augment_num : 100
+shots_num : 5
 
 # attribute information
 information : [[3, 20, 100], [100, 90, 80, 73], [0, 1, 2], [130, 115, 100, 90]]
 
 # logs
-save_log_path : "..\\experiments\\logs\\diffusion_log.log"
+save_log_path : "..\\experiments\\logs\\concat_linear3.log"
 
 # model_path
 save_model_root_path : "..\\experiments\\models"
@@ -39,7 +42,7 @@ beta_end : 0.02
 
 # train_parameters
 checkpoint_interval : 10
-epochs : 500
-batch_size : 128
+epochs : 600
+batch_size : 512
 learning_rate : 1e-3
 device : 'cpu'

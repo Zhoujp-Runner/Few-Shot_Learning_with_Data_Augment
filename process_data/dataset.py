@@ -26,18 +26,21 @@ class FaultDataset(Dataset):
     def __init__(self,
                  config,
                  mode='train',
-                 dim_decay_method='LDA',
+                 method='LDA',
+                 augment=False,
                  with_test=False):
         """
         :param config: config文件
         :param mode: 'train' or 'test'
+        :param method: 'LDA' or 'PCA'
+        :param augment: 表示是否使用扩增数据集
         :param with_test: 是否要将测试集包括进生成模型的训练集中
         """
         super(FaultDataset, self).__init__()
 
-        if dim_decay_method == 'LDA':
+        if method == 'LDA':
             self.data_path = config.save_lda_path
-        elif dim_decay_method == 'PCA':
+        elif method == 'PCA':
             self.data_path = config.save_pca_path
         else:
             raise ValueError("There is no such method for dim_decay!")
@@ -47,11 +50,22 @@ class FaultDataset(Dataset):
         with open(self.data_path, 'rb') as f:
             self.source_data = dill.load(f)
 
+        if augment:
+            root = config.save_augment_root
+            name = f"ConcatLinear_augment_num_{config.dataset_augment_num}.pkl"
+            self.augment_path = os.path.join(root, name)
+            with open(self.augment_path, 'rb') as aug_file:
+                self.augment_dict = dill.load(aug_file)
+
+            self.augment_data = self.augment_dict["data"]
+            self.augment_attribute = self.augment_dict["attribute"]
+
         self.data = self.source_data["data"]
         self.attribute = self.source_data["attribute"]
         self.information = config.information
 
         self.mode = mode
+        self.augment = augment
         self.with_test = with_test
         self.train_data = None
         self.train_attribute = None
@@ -69,10 +83,11 @@ class FaultDataset(Dataset):
     def divide_data(self):
         """
         将source_data中的数据分成train, test两部分
-        将某一个类别的第一个样本划分为测试集
-        即测试集中每个类别只有一个样本
-        将某一类别的除了第一个数据的后num个数据划分为训练集
-        其中，num的取值为self.shots_num， 在config文件中定义
+        将某一个类别的第一个样本划分为测试集， 即测试集中每个类别只有一个样本
+        K-shots问题，训练集需要按照K进行划分，如下：
+            将某一类别的除了第一个数据的后num个数据划分为训练集
+            其中，num的取值为self.shots_num， 在config文件中定义
+        如果augment为True，说明此时需要使用扩增的数据，直接将其拼接在整个数据后面
         """
         cooler, valve, pump, hydraulic = self.information
         att_iter = product(cooler, valve, pump, hydraulic)
@@ -106,6 +121,11 @@ class FaultDataset(Dataset):
         # self.train_data = np.delete(data, test_indices, axis=0)
         # self.train_attribute = np.delete(attribute, test_indices, axis=0)
 
+        # 是否使用扩增的数据
+        if self.augment:
+            self.train_data = np.concatenate([self.train_data, self.augment_data], axis=0)
+            self.train_attribute = np.concatenate([self.train_attribute, self.augment_attribute], axis=0)
+
         # np.ndarray -> torch.FloatTensor
         self.data = torch.FloatTensor(self.data)
         self.train_data = torch.FloatTensor(self.train_data)
@@ -137,14 +157,14 @@ class FaultDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = FaultDataset(config, mode='test')
+    dataset = FaultDataset(config, augment=True)
     # print(dataset.__getitem__(1))
     # print(dataset.__len__())
     # print(dataset.test_data)
     # print(dataset.test_attribute)
     print(dataset.train_data.shape)
     print(dataset.train_attribute.shape)
-    print(dataset.test_data == dataset.train_data)
+    # print(dataset.test_data == dataset.train_data)
     # print(dataset.classes)
     # indices = [1, 2, 3, 5]
     # test = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7]]

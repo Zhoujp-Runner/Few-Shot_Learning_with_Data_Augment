@@ -47,10 +47,10 @@ def data_augment(config, model_type):
         model_state = model_dict['model_state_dict']
         model.load_state_dict(model_state)
     elif model_type == "ConcatLinear":
-        epoch = 539
+        epoch = 599
         load_name = f'epoch{epoch}_checkpoint.pkl'
         load_root = config.save_model_root_path
-        sub_dir_name = "concat_linear3"
+        sub_dir_name = "concat_linear3_with_standard_data"
         load_path = os.path.join(load_root, model_type, sub_dir_name, load_name)
 
         # 加载预测模型
@@ -95,7 +95,7 @@ def data_augment(config, model_type):
 
     # 保存生成的数据
     save_augment_root = config.save_augment_root
-    save_augment_name = f"{model_type}2_augment_num_{config.augment_num}.pkl"
+    save_augment_name = f"{model_type}3_standard_augment_num_{config.augment_num}.pkl"
     save_augment_path = os.path.join(save_augment_root, save_augment_name)
     with open(save_augment_path, 'wb') as save_file:
         dill.dump(augment_dict, save_file)

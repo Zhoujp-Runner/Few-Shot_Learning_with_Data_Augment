@@ -32,7 +32,7 @@ class FaultDataset(Dataset):
         """
         :param config: config文件
         :param mode: 'train' or 'test'
-        :param method: 'LDA' or 'PCA'
+        :param method: 'LDA' or 'PCA' or 'Standard PCA'
         :param augment: 表示是否使用扩增数据集
         :param with_test: 是否要将测试集包括进生成模型的训练集中
         """
@@ -42,6 +42,8 @@ class FaultDataset(Dataset):
             self.data_path = config.save_lda_path
         elif method == 'PCA':
             self.data_path = config.save_pca_path
+        elif method == 'Standard PCA':
+            self.data_path = config.save_standard_pca_path
         else:
             raise ValueError("There is no such method for dim_decay!")
 
@@ -52,7 +54,7 @@ class FaultDataset(Dataset):
 
         if augment:
             root = config.save_augment_root
-            name = f"ConcatLinear_augment_num_{config.dataset_augment_num}.pkl"
+            name = f"ConcatLinear3_standard_augment_num_{config.dataset_augment_num}.pkl"
             self.augment_path = os.path.join(root, name)
             with open(self.augment_path, 'rb') as aug_file:
                 self.augment_dict = dill.load(aug_file)
@@ -157,7 +159,7 @@ class FaultDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = FaultDataset(config, augment=True)
+    dataset = FaultDataset(config, method='Standard PCA')
     # print(dataset.__getitem__(1))
     # print(dataset.__len__())
     # print(dataset.test_data)

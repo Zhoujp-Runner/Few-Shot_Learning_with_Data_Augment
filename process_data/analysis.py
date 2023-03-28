@@ -13,6 +13,7 @@ import dill
 import pandas as pd
 import yaml
 from easydict import EasyDict
+import math
 
 
 with open("..\\configs\\config_0.yaml") as f:
@@ -85,12 +86,26 @@ def pca(data, dim_out=64):
     return data_after_pca
 
 
-def dim_decay(data_dict, information, method=None):
+def data_standard(data: np.ndarray, eps=False):
+    """
+    对数据进行标准化处理
+    :param data:
+    :param eps:
+    :return:
+    """
+    std = np.std(data, axis=0)
+    mean = np.mean(data, axis=0)
+    standard_data = np.divide((data - mean), std, where=std != 0)
+    return standard_data
+
+
+def dim_decay(data_dict, information, method=None, standard=True):
     """
     对数据进行降维
     :param data_dict: 包含原始数据的字典
     :param information: 数据类别信息
     :param method: 用什么方法进行降维，可选"LDA"和"PCA"，当为None时，不对数据进行处理
+    :param standard: 是否对数据使用标准化
     :return: 包含降维后的数据的字典
     """
     if method is None:
@@ -100,6 +115,9 @@ def dim_decay(data_dict, information, method=None):
     attribute = data_dict["attribute"]
     source_data = data_dict["data"]
     data_dim_decay = None
+
+    if standard:
+        source_data = data_standard(source_data)
 
     if method == 'LDA':
         label = transform_attribute_to_label(attribute, information)
@@ -118,6 +136,7 @@ if __name__ == '__main__':
     save_path = config.save_path
     save_lda_path = config.save_lda_path
     save_pca_path = config.save_pca_path
+    save_standard_pca_path = config.save_standard_pca_path
     with open(save_path, 'rb') as f:
         data = dill.load(f)
     attribute = data['attribute']
@@ -135,9 +154,24 @@ if __name__ == '__main__':
     # count = Counter(label.numpy())
     # print(count)
     # print(max(count.values()))
-    # data_after_dim_decay = dim_decay(data, information, method='PCA')
-    # with open(save_pca_path, 'wb') as f_pca:
-    #     dill.dump(data_after_dim_decay, f_pca)
-    with open(save_pca_path, 'rb') as r_pca:
-        data_dict = dill.load(r_pca)
-    print(data_dict['data'].shape)
+    data_after_dim_decay = dim_decay(data, information, method='PCA')
+    with open(save_standard_pca_path, 'wb') as f_pca:
+        dill.dump(data_after_dim_decay, f_pca)
+    # with open(save_pca_path, 'rb') as r_pca:
+    #     data_dict = dill.load(r_pca)
+    # print(data_dict['data'].shape)
+
+    # test = [[1, 2, 3, 4, 5],
+    #         [2, 3, 4, 5, 6],
+    #         [3, 4, 5, 6, 7]]
+    # test = np.array(test)
+    # mean = np.mean(test, axis=0)
+    # std = np.std(test, axis=0)
+    # print(mean)
+    # print(std)
+    # s_test = (test - mean) / std
+    # print(test)
+    # print(s_test)
+    # a = np.array([1])
+    # b = np.array([0])
+    # print(a/b)

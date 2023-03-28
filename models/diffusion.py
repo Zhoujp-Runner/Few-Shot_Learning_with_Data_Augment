@@ -252,7 +252,7 @@ class DiffusionModel(object):
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict()
                 }
-                sub_dir_name = "concat_linear3"
+                sub_dir_name = "concat_linear3_with_standard_data"
                 model_name = f"epoch{epoch}_checkpoint.pkl"
                 save_model_path = os.path.join(config.save_model_root_path, model.type, sub_dir_name, model_name)
                 torch.save(checkpoint, save_model_path)

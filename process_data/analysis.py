@@ -99,11 +99,12 @@ def data_standard(data: np.ndarray, eps=False):
     return standard_data
 
 
-def dim_decay(data_dict, information, method=None, standard=True):
+def dim_decay(data_dict, information, dim_out=64, method=None, standard=True):
     """
     对数据进行降维
     :param data_dict: 包含原始数据的字典
     :param information: 数据类别信息
+    :param dim_out: 输出的数据维度
     :param method: 用什么方法进行降维，可选"LDA"和"PCA"，当为None时，不对数据进行处理
     :param standard: 是否对数据使用标准化
     :return: 包含降维后的数据的字典
@@ -121,9 +122,9 @@ def dim_decay(data_dict, information, method=None, standard=True):
 
     if method == 'LDA':
         label = transform_attribute_to_label(attribute, information)
-        data_dim_decay = lda(source_data, label)
+        data_dim_decay = lda(source_data, label, dim_out)
     elif method == 'PCA':
-        data_dim_decay = pca(source_data)
+        data_dim_decay = pca(source_data, dim_out)
 
     data_dict_af_dim_decay = {
         "data": data_dim_decay,

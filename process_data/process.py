@@ -50,6 +50,12 @@ def read_from_txt(text_list, dataset_root_path):
 
 
 def concat_according_profile(data_origin: dict, text_list):
+    """
+    根据类别，沿着第1维度对数据进行拼接
+    :param data_origin: 原始数据字典
+    :param text_list: 文件列表
+    :return: [N, dims]
+    """
     if "profile" not in data_origin.keys():
         raise ValueError("profile.txt must be loaded, it is not in the dict!")
 
@@ -71,33 +77,109 @@ def concat_according_profile(data_origin: dict, text_list):
     return data, attribute
 
 
-def process(config):
-    """对数据进行预处理"""
+def concat_2d(data_origin: dict, text_list):
+    """
+    根据类别，沿着第0维度对数据进行拼接
+    :param data_origin: 原始数据字典
+    :param text_list: 文件列表
+    :return: [N, attribute_num, dim]
+    """
+    if "profile" not in data_origin.keys():
+        raise ValueError("profile.txt must be loaded, it is not in the dict!")
+
+    attribute = data_origin['profile'].values
+
+    datas = []
+    for i in range(len(attribute)):
+        value = []
+        for key in data_origin.keys():
+            if key == "profile":
+                continue
+            value.append(data_origin[key].values)
+        data = np.concatenate(value, axis=0)
+        datas.append(data)
+    # datas = np.concatenate(datas, axis=0)
+
+    print(attribute)
+    # print(datas.shape)
+
+
+def process(config, split=False, dim3=False):
+    """
+    对数据进行预处理
+    :param config: 配置文件
+    :param split: 是否按照属性分别对数据进行处理，最后进行合并，如果为False，则一开始对数据在第0维进行拼接，然后降维
+    :param dim3: 只有一种情况该参数有效，即如果split为True，且dim3为True，那么数据会转换成三维的，即[N, attribute_num, 8]
+    """
     # 加载参数
     text_list = config.text_list
     dataset_root_path = config.dataset_root_path
     information = config.information
     save_path = config.save_path
     save_lda_path = config.save_lda_path
+    save_standard_pca_path = config.save_standard_pca_path
 
     # 初步处理
     source_data_dict = read_from_txt(text_list, dataset_root_path)
-    data, attribute = concat_according_profile(source_data_dict, text_list)
-    data_dict = {
-        "data": data,
-        "attribute": attribute[:, :-1]
-    }
+    if not split:
+        data, attribute = concat_according_profile(source_data_dict, text_list)
+        data_dict = {
+            "data": data,
+            "attribute": attribute[:, :-1]
+        }
 
-    # lda 降维
-    data_dict_after_lda = dim_decay(data_dict, information)
+        # 降维
+        data_dict_after_reduce = dim_decay(data_dict, information, method="PCA", standard=True)
 
-    # 保存数据
-    print(data_dict["data"].shape)
-    print(data_dict_after_lda["data"].shape)
-    with open(save_path, 'wb') as f:
-        dill.dump(data_dict, f)
-    with open(save_lda_path, 'wb') as f:
-        dill.dump(data_dict_after_lda, f)
+        # 保存数据
+        print(data_dict["data"].shape)
+        print(data_dict_after_reduce["data"].shape)
+        with open(save_path, 'wb') as f:
+            dill.dump(data_dict, f)
+        with open(save_standard_pca_path, 'wb') as f:
+            dill.dump(data_dict_after_reduce, f)
+    else:
+        # 将DataFrame数据转化成ndarray数据
+        # 并分别根据属性，进行降维
+        data = dict()
+        data["attribute"] = source_data_dict["profile"].values[:, :-1]
+        datas_after_reduce = dict()
+        for key in source_data_dict.keys():
+            if key == "profile":
+                continue
+            data["data"] = source_data_dict[key].values
+            data_after_reduce = dim_decay(data, information, dim_out=8, method="PCA", standard=True)
+            datas_after_reduce[key] = data_after_reduce["data"]
+
+        # 创建数据矩阵
+        # 其中dim3决定了创建的矩阵是否是3维的
+        if not dim3:
+            values = []
+            for key in datas_after_reduce.keys():
+                values.append(datas_after_reduce[key])
+            datas = np.concatenate(values, axis=1)
+        else:
+            values = []
+            for i in range(len(data["attribute"])):
+                value = []
+                for key in datas_after_reduce.keys():
+                    data_key_i = np.reshape(datas_after_reduce[key][i], (1, 8))
+                    value.append(data_key_i)
+                value = np.concatenate(value, axis=0)[None, ...]
+                values.append(value)
+            datas = np.concatenate(values, axis=0)
+
+        data_after_reduce_dict = {
+            "data": datas,
+            "attribute": source_data_dict["profile"].values[:, :-1]
+        }
+
+        # 保存数据
+        print(data_after_reduce_dict["data"].shape)
+        with open(save_standard_pca_path, 'wb') as f:
+            dill.dump(data_after_reduce_dict, f)
+
+
 
 
 if __name__ == '__main__':
@@ -116,4 +198,4 @@ if __name__ == '__main__':
     # #     save_dict = dill.load(f)
     # # print(save_dict)
     # # print(attr)
-    process(config)
+    process(config, split=True, dim3=False)

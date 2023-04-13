@@ -6,20 +6,16 @@
 2. 使用PCA对数据集进行降维
 """
 import numpy as np
+import sklearn.preprocessing
 import torch
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import dill
 import pandas as pd
 import yaml
 from easydict import EasyDict
 import math
-
-
-with open("..\\configs\\config_0.yaml") as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
-
-config = EasyDict(config)
 
 
 def transform_attribute_to_label(attribute, information):
@@ -69,7 +65,10 @@ def lda(data, label, dim_out=64):
     # 进行lda降维
     lda_model = LinearDiscriminantAnalysis(n_components=dim_out)
     lda_model.fit(data, label)
+    # print(lda_model._n_features_out)
     data_after_lda = lda_model.transform(data)
+    # print(lda_model._max_components)
+    # print(data_after_lda.shape)
     return data_after_lda
 
 
@@ -99,6 +98,34 @@ def data_standard(data: np.ndarray, eps=False):
     return standard_data
 
 
+def attribute_standard(attribute, information):
+    """
+    将属性归一化到[0, 100]之间
+    :param attribute:
+    :param information:
+    :return:
+    """
+    max_list = []
+    for item in information:
+        max_list.append(np.max(item))
+    max_list = np.array(max_list)
+    standard_attribute = (attribute / max_list) * 100
+    return standard_attribute
+
+
+def information_standard(information):
+    """
+    由于属性进行了归一化，所以这里也需要将information进行归一化，以便于匹配属性的变化
+    :param information:
+    :return:
+    """
+    standard_information = []
+    for item in information:
+        max_value = np.max(item)
+        standard_information.append(list((item / max_value) * 100))
+    return standard_information
+
+
 def dim_decay(data_dict, information, dim_out=64, method=None, standard=True):
     """
     对数据进行降维
@@ -117,14 +144,20 @@ def dim_decay(data_dict, information, dim_out=64, method=None, standard=True):
     source_data = data_dict["data"]
     data_dim_decay = None
 
-    if standard:
-        source_data = data_standard(source_data)
-
     if method == 'LDA':
         label = transform_attribute_to_label(attribute, information)
+        # print(label.shape)
         data_dim_decay = lda(source_data, label, dim_out)
+        # print(data_dim_decay.shape)
     elif method == 'PCA':
         data_dim_decay = pca(source_data, dim_out)
+
+    if standard:
+        # data_dim_decay = data_standard(data_dim_decay)
+        # standardscaler = StandardScaler()
+        scaler = MinMaxScaler()
+        data_dim_decay = scaler.fit_transform(data_dim_decay)
+    attribute = attribute_standard(attribute, information)
 
     data_dict_af_dim_decay = {
         "data": data_dim_decay,
@@ -134,15 +167,28 @@ def dim_decay(data_dict, information, dim_out=64, method=None, standard=True):
 
 
 if __name__ == '__main__':
+    with open("..\\configs\\config_0.yaml") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    config = EasyDict(config)
+
     save_path = config.save_path
     save_lda_path = config.save_lda_path
     save_pca_path = config.save_pca_path
     save_standard_pca_path = config.save_standard_pca_path
-    with open(save_path, 'rb') as f:
-        data = dill.load(f)
-    attribute = data['attribute']
+    # with open(save_path, 'rb') as f:
+    #     data = dill.load(f)
+    # attribute = data['attribute']
     information = [[3, 20, 100], [100, 90, 80, 73], [0, 1, 2], [130, 115, 100, 90]]
-    label = transform_attribute_to_label(attribute, information)
+    test_attribute = [[3, 100, 1, 130]]
+    # information = information_standard(information)
+    # with open(config.save_lda_path, 'rb') as f:
+    #     data = dill.load(f)
+    # label = transform_attribute_to_label(data['attribute'], information)
+    label = transform_attribute_to_label(test_attribute, information)
+    print(label)
+    # attribute_standard(attribute, information)
+    # label = transform_attribute_to_label(attribute, information)
     # source_data = data['data']
     # data_af_lda = lda(source_data, label)
     # data_dict_af_lda = dict()
@@ -155,9 +201,9 @@ if __name__ == '__main__':
     # count = Counter(label.numpy())
     # print(count)
     # print(max(count.values()))
-    data_after_dim_decay = dim_decay(data, information, method='PCA')
-    with open(save_standard_pca_path, 'wb') as f_pca:
-        dill.dump(data_after_dim_decay, f_pca)
+    # data_after_dim_decay = dim_decay(data, information, method='PCA')
+    # with open(save_standard_pca_path, 'wb') as f_pca:
+    #     dill.dump(data_after_dim_decay, f_pca)
     # with open(save_pca_path, 'rb') as r_pca:
     #     data_dict = dill.load(r_pca)
     # print(data_dict['data'].shape)
@@ -176,3 +222,4 @@ if __name__ == '__main__':
     # a = np.array([1])
     # b = np.array([0])
     # print(a/b)
+

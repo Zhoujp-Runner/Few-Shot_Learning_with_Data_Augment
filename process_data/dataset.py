@@ -24,18 +24,22 @@ class FaultDataset(Dataset):
                  config,
                  mode='train',
                  method='LDA',
+                 ways=None,
                  augment=False,
                  with_train=True,
-                 with_test=False):
+                 with_test=False,
+                 use_random_combination=False):
         """
         :param config: 配置参数
         :param mode: 'train' or 'test'
         :param method: 'LDA' or 'PCA' or 'Standard PCA' or \
                         'Split Standard PCA' or 'Split Standard Dim3 PCA' \
                         or 'LDA Standard' or 'Split LDA Standard' or 'Split LDA Standard Dim3'
+        :param ways: 默认为None，如果不为None，则指定了ways，不需要自动生成ways
         :param augment: 表示是否使用扩增数据集
         :param with_train: 扩增数据集是否包含原训练数据
         :param with_test: 是否要将测试集包括进生成模型的训练集中
+        :param use_random_combination: 是否对所有的随机生成的类别组合分别进行训练
         """
         super(FaultDataset, self).__init__()
 
@@ -87,7 +91,7 @@ class FaultDataset(Dataset):
             self.augment_attribute = self.augment_dict["attribute"]
 
         self.data = self.source_data["data"]
-        self.attribute = self.source_data["attribute"]
+        self.attribute = self.source_data["attribute"]  # 已经进行了归一化，区间为[0, 100]
         self.information = config.information
 
         self.config = config
@@ -96,7 +100,8 @@ class FaultDataset(Dataset):
         self.method = method
         self.with_train = with_train
         self.with_test = with_test
-        self.ways = None
+        self.use_random_combination = use_random_combination
+        self.ways = ways
         self.train_data = None
         self.train_attribute = None
         self.test_data = None
@@ -127,7 +132,20 @@ class FaultDataset(Dataset):
             att_list.append(list(item))
         att_list = attribute_standard(att_list, self.information)
 
-        indices = self.search_according_ways_num()
+        if self.ways is None:
+            # 根据ways_num获取组合
+            if self.use_random_combination:
+                indices = self.search_random_combination_ways()
+            else:
+                indices = self.search_according_ways_num()
+        else:
+            # 根据ways获取数据
+            profile = self.attribute
+            indices = []
+            for way in self.ways:
+                for idx, att in enumerate(profile):
+                    if np.all(way == att):
+                        indices.append(idx)
         self.data = self.data[indices]
         self.attribute = self.attribute[indices]
 
@@ -212,6 +230,28 @@ class FaultDataset(Dataset):
 
         return indices
 
+    def search_random_combination_ways(self):
+        """
+        根据ways_num获取随机的类别组合
+        """
+        # 得到所有的属性
+        attribute_list = np.unique(self.attribute, axis=0)
+        attribute_num = np.arange(len(attribute_list))
+
+        random_indices = np.random.choice(attribute_num, self.ways_num, replace=False)
+        random_combination = attribute_list[random_indices]
+        self.ways = random_combination
+
+        # 根据ways获取数据
+        profile = self.attribute
+        indices = []
+        for way in random_combination:
+            for idx, att in enumerate(profile):
+                if np.all(way == att):
+                    indices.append(idx)
+
+        return indices
+
     @property
     def _get_len(self):
         if self.mode == 'test':
@@ -241,13 +281,20 @@ if __name__ == '__main__':
 
     config = EasyDict(config)
 
-    dataset = FaultDataset(config, method='LDA')
+    dataset = FaultDataset(config, method='LDA', use_random_combination=True)
+    dataset2 = FaultDataset(config, method='LDA', ways=dataset.ways, use_random_combination=True)
+    print(dataset.ways)
+    print(dataset2.ways)
+    print(dataset.train_data)
+    print(dataset2.train_data)
+    print(dataset.train_attribute)
+    print(dataset2.train_attribute)
     # print(dataset.__getitem__(1))
     # print(dataset.__len__())
     # print(dataset.test_data)
     # print(dataset.test_attribute)
-    print(dataset.train_data.shape)
-    print(dataset.train_attribute)
+    # print(dataset.train_data.shape)
+    # print(dataset.train_attribute)
     # print(dataset.test_data == dataset.train_data)
     # print(dataset.classes)
     # indices = [1, 2, 3, 5]

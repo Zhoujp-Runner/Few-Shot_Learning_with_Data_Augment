@@ -109,7 +109,7 @@ if __name__ == '__main__':
     #
 
     lda = LinearDiscriminantAnalysis(n_components=2)
-    tsne = TSNE(n_components=2, perplexity=1)
+    tsne = TSNE(n_components=2, perplexity=3)
     mds = MDS(n_components=2)
 
     # # lda
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     source_data = dataset.train_data.numpy()
     augment = dataset_aug.train_data.numpy()
     print(source_data)
-    print(augment)
+    # print(augment)
     augment_data = []
     # source_data = []
     for i in range(5):

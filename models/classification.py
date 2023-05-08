@@ -140,9 +140,12 @@ class MLPClassification(nn.Module):
 
 class TrainClassification(object):
 
-    def __init__(self, config):
+    def __init__(self,
+                 config,
+                 ways):
         super(TrainClassification, self).__init__()
         self.config = config
+        self.ways=ways
         self.use_augment = [False, True]
         self._set_log()
         self.is_transform = False
@@ -169,11 +172,17 @@ class TrainClassification(object):
         self.filehandle.setFormatter(self.formatter)
         self.logger.addHandler(self.filehandle)
 
-    def train_loop(self):
+    def train_loop(self, time=0):
         result = []
         with_train = False
+        self.logger.info(f"time: {time}")
         for use_augment in self.use_augment:
-            dataset = FaultDataset(self.config, method=self.config.method, augment=use_augment, with_train=with_train)
+            dataset = FaultDataset(self.config,
+                                   method=self.config.method,
+                                   ways=self.ways,
+                                   augment=use_augment,
+                                   with_train=with_train)
+            self.logger.info(f"ways: {dataset.ways}")
             self.logger.info(f"with_train is {with_train}")
             max_epoch, max_accuracy = self.train(dataset)
             result.append([max_epoch, max_accuracy])

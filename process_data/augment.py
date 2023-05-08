@@ -14,7 +14,7 @@ from easydict import EasyDict
 from itertools import product
 
 from models.diffusion import DiffusionModel
-from models.model import MLPModel, ConcatModel, AttentionModel
+from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel
 from process_data.analysis import attribute_standard
 
 
@@ -47,13 +47,15 @@ class DataAugment(object):
         self.filehandle.setFormatter(self.formatter)
         self.logger.addHandler(self.filehandle)
 
-    def data_augment(self, dim_in, dim_condition, model_type, ways):
+    def data_augment(self, dim_in, dim_condition, model_type, ways, time=0):
         """
         使用扩散模型生成新数据，用于数据增强
         """
+        self.logger.info(f"time: {time}")
         self.logger.info(f"model_type : {model_type}")
         self.logger.info(f"augment_num : {self.config.augment_num}")
         self.logger.info(f"loading epoch : {self.epoch}")
+        self.logger.info(f"ways: {ways}")
 
         # 生成模型加载路径
         if model_type == "MLP":
@@ -91,6 +93,19 @@ class DataAugment(object):
 
             # 加载预测模型
             model = AttentionModel(dim_in=dim_in, dim_condition=dim_condition)
+
+            model_dict = torch.load(load_path)
+            model_state = model_dict['model_state_dict']
+            model.load_state_dict(model_state)
+
+        elif model_type == 'AdaModel':
+            load_name = f'epoch{self.epoch}_checkpoint.pkl'
+            load_root = self.config.diffusion_model_root
+            sub_dir_name = f"{self.config.shots_num}_{self.config.method}"
+            load_path = os.path.join(load_root, model_type, sub_dir_name, load_name)
+
+            # 加载预测模型
+            model = AdaModel(dim_in=dim_in, dim_hidden=128, attribute_dim=dim_condition, num_steps=self.config.num_diffusion_steps)
 
             model_dict = torch.load(load_path)
             model_state = model_dict['model_state_dict']

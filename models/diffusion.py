@@ -278,12 +278,19 @@ class DiffusionModel(object):
 
     def train(self,
               dataset,
-              model):
-        """训练模型"""
+              model,
+              time=0):
+        """
+        训练模型
+        :param dataset: 数据集
+        :param model: 模型
+        :param time: 第几次循环
+        """
         # 记录模型的结构以及一些参数
         self.logger.info(
             "================================================Diffusion Training======================================="
         )
+        self.logger.info(f"time: {time}")
         self.logger.info(model)
         self.logger.info(f"Batch_size: {self.batch_size}")
         self.logger.info(f"diffusion_step: {self.num_diffusion_steps}")
@@ -292,6 +299,7 @@ class DiffusionModel(object):
         self.logger.info(f"epochs: {self.epochs}")
         self.logger.info(f"dataset: method={dataset.method}")
         self.logger.info(f"beta schedule: {self.schedule_name}")
+        self.logger.info(f"ways: {dataset.ways}")
 
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 

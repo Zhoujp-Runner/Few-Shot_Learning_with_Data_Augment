@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models.component import ConcatSquashLinear
 from models.component import TransformerLayer
+from models.component import AdaEB
 """
 1. 纯全连接神经网络
 2. 使用ConcatSquashLinear构建的全连接神经网络
@@ -196,13 +197,36 @@ class TorchAttentionModel(nn.Module):
     pass
 
 
+class AdaModel(nn.Module):
+    def __init__(self, dim_in, dim_hidden, attribute_dim, num_steps):
+        super(AdaModel, self).__init__()
+        self.emb_layer = AdaEB(dim_hidden, attribute_dim, num_steps)
+        self.in_layer = nn.Sequential(
+            nn.Linear(dim_in, dim_hidden),
+            nn.ReLU(),
+        )
+        self.out_layer = nn.Linear(dim_hidden, dim_in)
+        self.type = 'AdaModel'
+
+    def forward(self, x, t, att):
+        h = self.in_layer(x)
+        emb = self.emb_layer(h, t, att)
+        out = self.out_layer(emb)
+        return out
+
+
 if __name__ == '__main__':
-    model = AttentionModel(64, 4)
-    input = torch.randn(32, 17, 64)
+    # model = AttentionModel(64, 4)
+    # input = torch.randn(32, 17, 64)
+    # attribute = torch.randn(32, 4)
+    # if len(attribute.shape) == 2:
+    #     attribute = attribute.unsqueeze(1)
+    # t = torch.randn(32, 1, 1)
+    # out = model(input, t, attribute)
+    # print(out.shape)
+    model = AdaModel(64, 128, 4)
+    input = torch.randn(32, 64)
     attribute = torch.randn(32, 4)
-    if len(attribute.shape) == 2:
-        attribute = attribute.unsqueeze(1)
-    t = torch.randn(32, 1, 1)
-    out = model(input, t, attribute)
-    print(out.shape)
+    t = torch.randn(32, 1)
+    print(model(input, t, attribute).shape)
 

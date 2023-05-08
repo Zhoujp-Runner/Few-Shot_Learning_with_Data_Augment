@@ -115,9 +115,43 @@ class TransformerLayer(nn.Module):
         return ffn
 
 
+class AdaEB(nn.Module):
+    def __init__(self, dim_in, attribute_dim, num_steps):
+        super(AdaEB, self).__init__()
+        # self.time_linear = nn.Linear(1, dim_in)
+        self.time_emb = nn.Embedding(num_steps, 32)
+        self.scale = nn.Linear(attribute_dim + 32, dim_in)
+        self.shift = nn.Linear(attribute_dim + 32, dim_in)
+        # self.group_norm = nn.GroupNorm(num_groups=1, num_channels=1)
+
+    def forward(self, x, t, att):
+        if len(att) <= 1:
+            batch_size = x.shape[0]
+            att = att.expand(batch_size, 4)
+
+        # concat t 和 att
+        # t_emb = torch.concat([t, torch.sin(t), torch.cos(t)], dim=-1)
+        # emb = torch.concat([att, t_emb], dim=-1)
+        t_emb = self.time_emb(t)
+        t_emb = t_emb.squeeze(1)
+        emb = torch.cat([att, t_emb], dim=-1)
+
+        scale = torch.sigmoid(self.scale(emb))
+        shift = self.shift(emb)
+
+        out = scale * x + shift
+        # out = self.group_norm(x) * ys + yb
+        return out
+
+
 if __name__ == '__main__':
-    att = SelfAttention(dim_in=136, hidden_dim=256)
-    data = torch.randn(32, 17, 136)
-    out = att(data)
-    print(out.shape)
+    # att = SelfAttention(dim_in=136, hidden_dim=256)
+    # data = torch.randn(32, 17, 136)
+    # out = att(data)
+    # print(out.shape)
+    x = torch.randn(32, 64)
+    t = torch.randn(32, 1)
+    att = torch.randn(32, 4)
+    ada = AdaEB(64, 4)
+    print(ada(x, t, att).shape)
 

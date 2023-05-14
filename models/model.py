@@ -198,9 +198,9 @@ class TorchAttentionModel(nn.Module):
 
 
 class AdaModel(nn.Module):
-    def __init__(self, dim_in, dim_hidden, attribute_dim, num_steps):
+    def __init__(self, dim_in, dim_hidden, attribute_dim, num_steps, dataset):
         super(AdaModel, self).__init__()
-        self.emb_layer = AdaEB(dim_hidden, attribute_dim, num_steps)
+        self.emb_layer = AdaEB(dim_hidden, attribute_dim, num_steps, dataset)
         self.in_layer = nn.Sequential(
             nn.Linear(dim_in, dim_hidden),
             nn.ReLU(),

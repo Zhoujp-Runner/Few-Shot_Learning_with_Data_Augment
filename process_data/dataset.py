@@ -42,6 +42,7 @@ class FaultDataset(Dataset):
         :param use_random_combination: 是否对所有的随机生成的类别组合分别进行训练
         """
         super(FaultDataset, self).__init__()
+        self.dataset_type = 'Hydraulic'
 
         if method == 'LDA':
             self.data_path = config.save_lda_path
@@ -275,20 +276,113 @@ class FaultDataset(Dataset):
         return self._get_len
 
 
+class TEPDataset(Dataset):
+    def __init__(self,
+                 config,
+                 mode='train',
+                 shots_num=None,
+                 ways_num=None,
+                 ways=None,
+                 augment=False):
+        super(TEPDataset, self).__init__()
+        self.dataset_type = 'TEP'
+        self.config = config
+        self.mode = mode
+        self.augment = augment
+
+        self.source_path = config.tep_train_lda_standard_path
+        if not os.path.exists(self.source_path):
+            raise ValueError("There is not a such file of tep dataset!")
+        with open(self.source_path, 'rb') as f:
+            self.source_data = dill.load(f)
+
+        if shots_num is None:
+            self.shots_num = config.shots_num
+        else:
+            self.shots_num = shots_num
+        if ways_num is None:
+            self.ways_num = config.ways_num
+        else:
+            self.ways_num = ways_num
+
+        self.total_classes = np.arange(1, 22)  # TEP数据集总共有21种故障类型
+        self.train_data = []
+        self.test_data = []
+        self.ways = None
+        self.get_data_randomly()
+
+        if self.mode == 'train':
+            self.len = len(self.train_data)
+        elif self.mode == 'test':
+            self.len = len(self.test_data)
+
+    def get_data_randomly(self):
+        """
+        根据ways_num和shots_num，随机地从数据集中选取数据
+        :return:
+        """
+        # 随机选择ways
+        self.ways = np.random.choice(self.total_classes, size=self.ways_num, replace=False)
+        # 根据ways以及shots_num，随机选择shots
+        index = np.arange(0, 480)  # 每一类中有480个样本
+        for way in self.ways:
+            data_of_way = []
+            for item in self.source_data:
+                if item[-1] == way:
+                    data_of_way.append(item)
+            # TODO 这里注意一下为什么concatenate和stack的效果会不一样
+            data_of_way = np.stack(data_of_way, axis=0)
+            # 随机选择shots，注意由于data不是一维的，所以需要用索引矩阵
+            index_of_shots = np.random.choice(index, size=self.shots_num, replace=False)
+            shots_of_way = data_of_way[index_of_shots]
+            data_copy = np.copy(data_of_way)
+            data_except_shots = np.delete(data_copy, index_of_shots, axis=0)
+            self.train_data.append(shots_of_way)
+            self.test_data.append(data_except_shots)
+
+        self.train_data = np.concatenate(self.train_data, axis=0)  # 最终的数据集 shape:[ways_num * shots_num, 53]
+        self.test_data = np.concatenate(self.test_data, axis=0)
+
+        if self.augment:
+            save_augment_root = self.config.augment_data_root
+            save_augment_name = f"{self.config.shots_num}_{self.config.dataset_type}_{self.config.augment_num}.pkl"
+            save_augment_path = os.path.join(save_augment_root, save_augment_name)
+            with open(save_augment_path, 'rb') as f:
+                self.train_data = dill.load(f)
+
+        self.train_data = torch.FloatTensor(self.train_data)
+        self.test_data = torch.FloatTensor(self.test_data)
+
+    def __getitem__(self, item):
+        """返回数据和标签值"""
+        if self.mode == 'train':
+            sample_with_label = self.train_data[item]
+        elif self.mode == 'test':
+            sample_with_label = self.test_data[item]
+        else:
+            raise ValueError(f"No such mode:{self.mode} !")
+        sample = sample_with_label[:-1]
+        label = sample_with_label[-1].int()
+        return sample, label
+
+    def __len__(self):
+        return self.len
+
+
 if __name__ == '__main__':
     with open("..\\configs\\config_0.yaml") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     config = EasyDict(config)
-
-    dataset = FaultDataset(config, method='LDA', use_random_combination=True)
-    dataset2 = FaultDataset(config, method='LDA', ways=dataset.ways, use_random_combination=True)
-    print(dataset.ways)
-    print(dataset2.ways)
-    print(dataset.train_data)
-    print(dataset2.train_data)
-    print(dataset.train_attribute)
-    print(dataset2.train_attribute)
+    # # 液压数据集
+    # dataset = FaultDataset(config, method='LDA', use_random_combination=True)
+    # dataset2 = FaultDataset(config, method='LDA', ways=dataset.ways, use_random_combination=True)
+    # print(dataset.ways)
+    # print(dataset2.ways)
+    # print(dataset.train_data)
+    # print(dataset2.train_data)
+    # print(dataset.train_attribute)
+    # print(dataset2.train_attribute)
     # print(dataset.__getitem__(1))
     # print(dataset.__len__())
     # print(dataset.test_data)
@@ -304,3 +398,19 @@ if __name__ == '__main__':
     # dele[0][0] = 0
     # print(test)
     # print(dele)
+
+    # TEP数据集
+    tep_dataset = TEPDataset(config, mode='test')
+    x, y = tep_dataset.__getitem__(0)
+    print(x)
+    print(y.type())
+    print(tep_dataset.__len__())
+    test_data = tep_dataset.test_data
+    # data, labels = torch.split(test_data, [52, 1], dim=-1)
+    # print(data.shape)
+    # print(labels)
+    # labels = labels.view(-1)
+    # print(labels)
+    # x = torch.IntTensor([1, 2, 3, 2, 1])
+    # y = torch.FloatTensor([1, 2, 5, 2, 1])
+    # print(torch.sum(x == y))

@@ -36,7 +36,12 @@ class DataAugment(object):
 
         # self.filehandle = logging.FileHandler(self.config.save_log_path)
         file_root = self.config.augment_root
-        file_name = f"augment_{self.config.shots_num}_{self.config.method}.log"
+        if self.config.dataset_type == 'Hydraulic':
+            file_name = f"augment_{self.config.shots_num}_{self.config.method}.log"
+        elif self.config.dataset_type == 'TEP':
+            file_name = f"augment_{self.config.shots_num}_{self.config.dataset_type}.log"
+        else:
+            raise ValueError('Please use the right dataset!')
         file_path = os.path.join(file_root, file_name)
         self.filehandle = logging.FileHandler(file_path)
         self.filehandle.setLevel(logging.DEBUG)
@@ -47,7 +52,7 @@ class DataAugment(object):
         self.filehandle.setFormatter(self.formatter)
         self.logger.addHandler(self.filehandle)
 
-    def data_augment(self, dim_in, dim_condition, model_type, ways, time=0):
+    def data_augment(self, dim_in, dim_condition, model_type, ways, time=0, dataset='Hydraulic'):
         """
         使用扩散模型生成新数据，用于数据增强
         """
@@ -105,7 +110,11 @@ class DataAugment(object):
             load_path = os.path.join(load_root, model_type, sub_dir_name, load_name)
 
             # 加载预测模型
-            model = AdaModel(dim_in=dim_in, dim_hidden=128, attribute_dim=dim_condition, num_steps=self.config.num_diffusion_steps)
+            model = AdaModel(dim_in=dim_in,
+                             dim_hidden=64,
+                             attribute_dim=dim_condition,
+                             num_steps=self.config.num_diffusion_steps,
+                             dataset=dataset)
 
             model_dict = torch.load(load_path)
             model_state = model_dict['model_state_dict']
@@ -132,29 +141,48 @@ class DataAugment(object):
         # attributes = attribute_standard(attributes, self.config.information)  # 归一化属性
         # attributes = torch.FloatTensor(attributes)
         # # attributes = attributes[:5]  # TODO 只生成前5个类别
-        attributes = torch.FloatTensor(ways)  # 需要生成的类别
+        if dataset == 'Hydraulic':
+            attributes = torch.FloatTensor(ways)  # 需要生成的类别
+        elif dataset == 'TEP':
+            attributes = torch.IntTensor(ways)  # 需要生成的类别
+        else:
+            raise ValueError("Please use the right dataset!")
         self.logger.info(f"Generate Attributes: {attributes}")
 
         # 扩增数据集
         augment_data = []
         augment_attribute = []
         for attribute in attributes:
-            attribute = attribute.unsqueeze(0)  # [1, 4]
+            attribute = attribute.unsqueeze(0)  # [1, attribute_dim]
             # TODO 这里对于每一个属性使用同一个diffusion model进行生成样本，是否有问题？
             data = diffusion_model.sample_loop(model, augment_size, attribute=attribute)
-            augment_attribute.append(attribute.expand(augment_size[0], 4).numpy())
+            if dataset == 'Hydraulic':
+                augment_attribute.append(attribute.expand(augment_size[0], 4).numpy())
+            elif dataset == 'TEP':
+                augment_attribute.append(attribute.expand(augment_size[0], 1).numpy())
             augment_data.append(data.cpu().numpy())
         augment_data = np.concatenate(augment_data, axis=0)  # [100*class_num, dim]
-        augment_attribute = np.concatenate(augment_attribute, axis=0)  # [100*class_num, 4]
-        augment_dict = {
-            "data": augment_data,
-            "attribute": augment_attribute
-        }
+        augment_attribute = np.concatenate(augment_attribute, axis=0)  # [100*class_num, attribute_dim]
+        if dataset == 'Hydraulic':
+            augment_dict = {
+                "data": augment_data,
+                "attribute": augment_attribute
+            }
+        elif dataset == 'TEP':
+            augment_dict = np.concatenate([augment_data, augment_attribute], axis=-1)
+            print(augment_dict.shape)
+        else:
+            raise ValueError("Please use the right dataset!")
         # print(diffusion_model.sample_list)
 
         # 保存生成的数据
         save_augment_root = self.config.augment_data_root
-        save_augment_name = f"{self.config.shots_num}_{self.config.method}_{self.config.augment_num}.pkl"
+        if dataset == 'Hydraulic':
+            save_augment_name = f"{self.config.shots_num}_{self.config.method}_{self.config.augment_num}.pkl"
+        elif dataset == 'TEP':
+            save_augment_name = f"{self.config.shots_num}_{self.config.dataset_type}_{self.config.augment_num}.pkl"
+        else:
+            raise ValueError("Please use the right dataset!")
         save_augment_path = os.path.join(save_augment_root, save_augment_name)
         with open(save_augment_path, 'wb') as save_file:
             dill.dump(augment_dict, save_file)

@@ -17,6 +17,8 @@ import torch
 import yaml
 from easydict import EasyDict
 from itertools import product
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.preprocessing import MinMaxScaler
 
 from analysis import dim_decay, attribute_standard
 
@@ -27,7 +29,7 @@ from analysis import dim_decay, attribute_standard
 
 def read_from_txt(text_list, dataset_root_path):
     """
-    从txt文件中读取数据，存入字典
+    （液压数据集）从txt文件中读取数据，存入字典
     :param text_list: 需要读取的文件名列表
     :param dataset_root_path: txt所在文件的根目录
     :return: 以文件名为键，数据为值的字典
@@ -45,9 +47,45 @@ def read_from_txt(text_list, dataset_root_path):
     return data_origin
 
 
+def read_from_xlsx(dataset_root_path):
+    """
+    （TEP数据集）从xlsx文件中读取数据，存入ndarray文件中
+    :param dataset_root_path: xlsx所在文件的根目录
+    :return: ndarray[data, label(class)]
+    """
+    # 检查路径
+    if not os.path.exists(dataset_root_path):
+        raise ValueError("Wrong path!")
+
+    # 读取文件名
+    filenames = os.listdir(dataset_root_path)
+    data_len = 480  # TEP数据集每一类中的样本数是480
+    datas = []
+    for filename in filenames:
+        # 确保所有文件名是以 d 开头
+        if not filename[0] == 'd':
+            continue
+        # 提取标签，整型数据
+        label = int(filename.split('.')[0][1:3])
+        file_path = os.path.join(dataset_root_path, filename)
+        data = pd.read_excel(file_path, header=None, index_col=None)
+        if label == 0:
+            continue  # 第0个数据是正常操作的数据，不属于故障数据，所以舍去
+
+        if not len(data) == data_len:  # 检查数据的shape
+            raise ValueError("Please check the shape of data!")
+        label = np.array([label]*data_len)[..., None]
+        data_with_label = np.concatenate([data.values, label], axis=-1)
+        datas.append(data_with_label)
+
+    datas_with_labels = np.concatenate(datas)
+    print(datas_with_labels.shape)
+    return datas_with_labels
+
+
 def search_according_shots_num(data_origin, ways_num, information):
     """
-    根据ways_num挑选数据
+    （液压数据集）根据ways_num挑选数据
     选择的规则是尽可能让更多的属性不相同
     :param data_origin: 原始数据
     :param ways_num: 一共所需要训练的类别数量
@@ -95,7 +133,7 @@ def search_according_shots_num(data_origin, ways_num, information):
 
 def concat_according_profile(data_origin: dict, text_list):
     """
-    根据类别，沿着第1维度对数据进行拼接
+    （液压数据集）根据类别，沿着第1维度对数据进行拼接
     :param data_origin: 原始数据字典
     :param text_list: 文件列表
     :return: [N, dims]
@@ -123,7 +161,7 @@ def concat_according_profile(data_origin: dict, text_list):
 
 def concat_2d(data_origin: dict, text_list):
     """
-    根据类别，沿着第0维度对数据进行拼接
+    （液压数据集）根据类别，沿着第0维度对数据进行拼接
     :param data_origin: 原始数据字典
     :param text_list: 文件列表
     :return: [N, attribute_num, dim]
@@ -150,7 +188,7 @@ def concat_2d(data_origin: dict, text_list):
 
 def process(config, split=False, dim3=False, standard=True):
     """
-    对数据进行预处理
+    （液压数据集）对数据进行预处理
     :param config: 配置文件
     :param split: 是否按照属性分别对数据进行处理，最后进行合并，如果为False，则一开始对数据在第0维进行拼接，然后降维
     :param dim3: 只有一种情况该参数有效，即如果split为True，且dim3为True，那么数据会转换成三维的，即[N, attribute_num, 8]
@@ -265,11 +303,29 @@ def process(config, split=False, dim3=False, standard=True):
                 dill.dump(data_after_reduce_dict, f)
 
 
-if __name__ == '__main__':
-    with open("..\\configs\\config_0.yaml") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
+def process_tep():
+    path = r"..\dataset\TEP\train"
+    tep_data = read_from_xlsx(path)
 
-    config = EasyDict(config)
+    source_data, source_label = np.split(tep_data, [52, ], axis=-1)
+    source_label = np.squeeze(source_label, axis=-1)
+    lda = LinearDiscriminantAnalysis(n_components=16)
+    source_data = lda.fit_transform(source_data, source_label)
+    scaler = MinMaxScaler()
+    source_data = scaler.fit_transform(source_data)
+    source_label = source_label[..., None]
+    source_datas = np.concatenate([source_data, source_label], axis=-1)
+
+    save_path = r"..\processed_data\tep_train_lda_standard.pkl"
+    with open(save_path, 'wb') as f:
+        dill.dump(source_datas, f)
+
+
+if __name__ == '__main__':
+    # with open("..\\configs\\config_0.yaml") as f:
+    #     config = yaml.load(f, Loader=yaml.FullLoader)
+    #
+    # config = EasyDict(config)
     # information = config["information"]
     # text_list = config["text_list"]
     # dataset_root_path = config["dataset_root_path"]
@@ -293,13 +349,13 @@ if __name__ == '__main__':
     # # print(save_dict)
     # # print(attr)
 
-    process(config, split=False, dim3=False, standard=False)
-    path = "..\\processed_data\\5ways_LDA.pkl"
-    with open(path, 'rb') as f:
-        data = dill.load(f)
-    print(np.min(data['data']))
-    print(np.max(data['data']))
-    print(type(data['attribute']))
+    # process(config, split=False, dim3=False, standard=False)
+    # path = "..\\processed_data\\5ways_LDA.pkl"
+    # with open(path, 'rb') as f:
+    #     data = dill.load(f)
+    # print(np.min(data['data']))
+    # print(np.max(data['data']))
+    # print(type(data['attribute']))
 
     # root = "..\\dataset"
     # test_li = ["SE", "profile"]
@@ -332,3 +388,5 @@ if __name__ == '__main__':
     #     value = np.concatenate(value, axis=0)[None, ...]
     #     values.append(value)
     # datas = np.concatenate(values, axis=0)
+
+    process_tep()

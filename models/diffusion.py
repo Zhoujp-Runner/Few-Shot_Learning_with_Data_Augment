@@ -70,7 +70,12 @@ class DiffusionModel(object):
 
         # self.filehandle = logging.FileHandler(self.config.save_log_path)
         file_root = self.config.diffusion_root
-        file_name = f"diffusion_{self.config.shots_num}_{self.config.method}.log"
+        if self.config.dataset_type == 'Hydraulic':
+            file_name = f"diffusion_{self.config.shots_num}_{self.config.method}.log"
+        elif self.config.dataset_type == 'TEP':
+            file_name = f"diffusion_{self.config.shots_num}_{self.config.dataset_type}.log"
+        else:
+            raise ValueError('Please use the right dataset!')
         file_path = os.path.join(file_root, file_name)
         self.filehandle = logging.FileHandler(file_path)
         self.filehandle.setLevel(logging.DEBUG)
@@ -291,13 +296,15 @@ class DiffusionModel(object):
             "================================================Diffusion Training======================================="
         )
         self.logger.info(f"time: {time}")
+        self.logger.info(f"Dataset: {dataset.dataset_type}")
         self.logger.info(model)
         self.logger.info(f"Batch_size: {self.batch_size}")
         self.logger.info(f"diffusion_step: {self.num_diffusion_steps}")
         self.logger.info(f"learning_rate: {self.lr}")
         self.logger.info(f"K-shots: k={self.config.shots_num}")
         self.logger.info(f"epochs: {self.epochs}")
-        self.logger.info(f"dataset: method={dataset.method}")
+        if dataset.dataset_type == 'Hydraulic':
+            self.logger.info(f"dataset: method={dataset.method}")
         self.logger.info(f"beta schedule: {self.schedule_name}")
         self.logger.info(f"ways: {dataset.ways}")
 

@@ -116,22 +116,32 @@ class TransformerLayer(nn.Module):
 
 
 class AdaEB(nn.Module):
-    def __init__(self, dim_in, attribute_dim, num_steps):
+    def __init__(self, dim_in, attribute_dim, num_steps, dataset):
         super(AdaEB, self).__init__()
+        self.dataset = dataset
         # self.time_linear = nn.Linear(1, dim_in)
         self.time_emb = nn.Embedding(num_steps, 32)
+        if self.dataset == 'TEP':
+            self.class_emb = nn.Embedding(22, attribute_dim)
         self.scale = nn.Linear(attribute_dim + 32, dim_in)
         self.shift = nn.Linear(attribute_dim + 32, dim_in)
         # self.group_norm = nn.GroupNorm(num_groups=1, num_channels=1)
 
     def forward(self, x, t, att):
         if len(att) <= 1:
-            batch_size = x.shape[0]
-            att = att.expand(batch_size, 4)
+            if self.dataset == 'Hydraulic':
+                batch_size = x.shape[0]
+                att = att.expand(batch_size, 4)
+            elif self.dataset == 'TEP':
+                batch_size = x.shape[0]
+                att = att.expand(batch_size, 1)
 
         # concat t 和 att
         # t_emb = torch.concat([t, torch.sin(t), torch.cos(t)], dim=-1)
         # emb = torch.concat([att, t_emb], dim=-1)
+        if self.dataset == 'TEP':
+            att = self.class_emb(att)
+            att = att.squeeze(1)
         t_emb = self.time_emb(t)
         t_emb = t_emb.squeeze(1)
         emb = torch.cat([att, t_emb], dim=-1)

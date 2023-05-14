@@ -5,12 +5,13 @@
 1.KNN算法
 """
 import os.path
+import sys
 
 import numpy as np
 import torch
 import pandas as pd
 from collections import Counter
-from process_data.dataset import FaultDataset
+from process_data.dataset import FaultDataset, TEPDataset
 import yaml
 from easydict import EasyDict
 from torch import nn
@@ -114,7 +115,7 @@ class KNN(object):
 
 
 class MLPClassification(nn.Module):
-    def __init__(self, dim_in, dim3=False):
+    def __init__(self, dim_in, dim3=False, dataset='Hydraulic'):
         super(MLPClassification, self).__init__()
         if dim3:
             self.layers = nn.Sequential(
@@ -124,13 +125,19 @@ class MLPClassification(nn.Module):
                 nn.ReLU(),
                 nn.Linear(dim_in//4, 144)
             )
-        else:
+        elif dataset == 'Hydraulic':
             self.layers = nn.Sequential(
                 nn.Linear(dim_in, 128),
                 nn.ReLU(),
                 nn.Linear(128, 256),
                 nn.ReLU(),
                 nn.Linear(256, 144)
+            )
+        elif dataset == 'TEP':
+            self.layers = nn.Sequential(
+                nn.Linear(dim_in, 128),
+                nn.ReLU(),
+                nn.Linear(128, 21)
             )
         self.type = 'FullConnected'
 
@@ -161,7 +168,12 @@ class TrainClassification(object):
 
         # self.filehandle = logging.FileHandler(self.config.save_log_path)
         file_root = self.config.classification_root
-        file_name = f"classification_{self.config.shots_num}_{self.config.method}.log"
+        if self.config.dataset_type == 'Hydraulic':
+            file_name = f"classification_{self.config.shots_num}_{self.config.method}.log"
+        elif self.config.dataset_type == 'TEP':
+            file_name = f"classification_{self.config.shots_num}_{self.config.dataset_type}.log"
+        else:
+            raise ValueError('Please use the right dataset!')
         file_path = os.path.join(file_root, file_name)
         self.filehandle = logging.FileHandler(file_path)
         self.filehandle.setLevel(logging.DEBUG)
@@ -172,20 +184,33 @@ class TrainClassification(object):
         self.filehandle.setFormatter(self.formatter)
         self.logger.addHandler(self.filehandle)
 
-    def train_loop(self, time=0):
+    def train_loop(self, time=0, data_set=None):
+        if data_set is not None:
+            test_data = data_set.test_data
         result = []
         with_train = False
         self.logger.info(f"time: {time}")
         for use_augment in self.use_augment:
-            dataset = FaultDataset(self.config,
-                                   method=self.config.method,
-                                   ways=self.ways,
-                                   augment=use_augment,
-                                   with_train=with_train)
-            self.logger.info(f"ways: {dataset.ways}")
-            self.logger.info(f"with_train is {with_train}")
-            max_epoch, max_accuracy = self.train(dataset)
-            result.append([max_epoch, max_accuracy])
+            if data_set is None:
+                dataset = FaultDataset(self.config,
+                                       method=self.config.method,
+                                       ways=self.ways,
+                                       augment=use_augment,
+                                       with_train=with_train)
+                self.logger.info(f"ways: {dataset.ways}")
+                self.logger.info(f"with_train is {with_train}")
+                max_epoch, max_accuracy = self.train(dataset)
+                result.append([max_epoch, max_accuracy])
+            elif data_set is not None and use_augment is False:
+                self.logger.info(f"ways: {data_set.ways}")
+                max_epoch, max_accuracy = self.train(data_set)
+                result.append([max_epoch, max_accuracy])
+            elif data_set is not None and use_augment is True:
+                dataset = TEPDataset(self.config,
+                                     augment=use_augment)
+                dataset.test_data = test_data
+                max_epoch, max_accuracy = self.train(dataset)
+                result.append([max_epoch, max_accuracy])
         return result
 
     def train(self, data_set):
@@ -194,32 +219,35 @@ class TrainClassification(object):
         # 初始化标签转换的判断变量
         self.is_transform = False
         print(data_set.train_data.shape)
+        if data_set.dataset_type == 'Hydraulic':
+            # 将四维的属性向量转化为144维的类别向量
+            information = information_standard(self.config.information)
+            label_1d = transform_attribute_to_label(data_set.train_attribute, information)
+            print(label_1d)
+            label_list = []
+            for idx in label_1d:
+                label = torch.zeros((1, 144))
+                idx = int(idx.item())
+                label[0][idx] = 1
+                label_list.append(label)
+            label = torch.cat(label_list, dim=0)
+            data_set.train_attribute = torch.FloatTensor(label)
 
-        # 将四维的属性向量转化为144维的类别向量
-        information = information_standard(self.config.information)
-        label_1d = transform_attribute_to_label(data_set.train_attribute, information)
-        print(label_1d)
-        label_list = []
-        for idx in label_1d:
-            label = torch.zeros((1, 144))
-            idx = int(idx.item())
-            label[0][idx] = 1
-            label_list.append(label)
-        label = torch.cat(label_list, dim=0)
-        data_set.train_attribute = torch.FloatTensor(label)
-
-        if self.config.method == 'Split Standard Dim3 PCA' or self.config.method == 'Split LDA Standard Dim3':
+        if (self.config.method == 'Split Standard Dim3 PCA' or self.config.method == 'Split LDA Standard Dim3') \
+                and data_set.dataset_type == 'Hydraulic':
             train_set_size = data_set.train_data.shape[0]
             test_set_size = data_set.test_data.shape[0]
             data_set.train_data = data_set.train_data.contiguous().view(train_set_size, -1)
             data_set.test_data = data_set.test_data.contiguous().view(test_set_size, -1)
 
         dim_in = data_set.train_data.shape[-1]
+        if data_set.dataset_type == 'TEP':
+            dim_in = data_set.train_data.shape[-1] - 1  # 因为最后一维是标签
 
         dataloader = DataLoader(data_set, batch_size=128, shuffle=True)
 
         device = 'cpu'
-        model = MLPClassification(dim_in)
+        model = MLPClassification(dim_in, dataset=data_set.dataset_type)
         model = model.to(device)
 
         loss_func = nn.CrossEntropyLoss()
@@ -231,10 +259,21 @@ class TrainClassification(object):
             total_loss = 0
             pb_dataloader = tqdm(dataloader, desc=f"Epoch{epoch}: ")
             for data, attribute in pb_dataloader:
+                batch_size = data.shape[0]
                 data = data.to(device)
-                attribute = attribute.to(device)
+                if data_set.dataset_type == 'TEP':
+                    one_hot = torch.zeros(batch_size, 21)
+                    attribute = attribute.view(-1).long()  # [batch_size, 1] -> [batch_size, ]
+                    for index, y in enumerate(attribute):
+                        one_hot[index][y-1] = 1
+                    attribute = one_hot
+                    attribute = attribute.to(device)
+                elif data_set.dataset_type == 'Hydraulic':
+                    attribute = attribute.to(device)
 
                 out = model(data)
+                print(out)
+                print(attribute)
                 loss = loss_func(out, attribute)
                 optimizer.zero_grad()
                 loss.backward()
@@ -272,14 +311,20 @@ class TrainClassification(object):
     def test(self, data_set, dim_in, model=None, load_path=None):
         with torch.no_grad():
             # 确保数据集不会进行两次标签转换
-            if not self.is_transform:
+            if not self.is_transform and data_set.dataset_type == 'Hydraulic':
                 information = information_standard(self.config.information)
                 label_1d_test = transform_attribute_to_label(data_set.test_attribute, information)
                 data_set.test_attribute = torch.FloatTensor(label_1d_test)
                 self.is_transform = True
 
-            data = data_set.test_data  # [batch_size, 64]
-            labels = data_set.test_attribute  # [batch_size, 144]
+                data = data_set.test_data  # [batch_size, 64]
+                labels = data_set.test_attribute  # [batch_size, 144]
+
+            elif data_set.dataset_type == 'TEP':
+                data_with_labels = data_set.test_data  # [..., 53]
+                data, labels = torch.split(data_with_labels, [16, 1], dim=-1)
+                labels = labels - 1
+                labels = labels.view(-1)
 
             if load_path is not None and model is None:
                 model = MLPClassification(dim_in)
@@ -291,7 +336,11 @@ class TrainClassification(object):
 
             out = model(data)  # [batch_size, 144]
             values, indices = torch.max(out, dim=1, out=None)
-            accuracy = torch.sum(indices == labels) / len(data_set.test_attribute)
+            # print(indices)
+            # print(labels)
+            # print(torch.sum(indices == labels))
+            print(len(data_set.test_data))
+            accuracy = torch.sum(indices == labels) / len(data_set.test_data)
         return accuracy.item()
 
 
@@ -301,10 +350,11 @@ if __name__ == '__main__':
 
     config = EasyDict(config)
 
-    da = np.array([[4, 4, 4], [3, 3, 3], [4, 4, 4], [4, 4, 4]])
-    x_in = np.array([[2, 2, 2], [1, 1, 1]])
-    la = np.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3], [3, 3, 3, 3]])
-    dataset = FaultDataset(config, method='Split Standard Dim3 PCA')
+    # da = np.array([[4, 4, 4], [3, 3, 3], [4, 4, 4], [4, 4, 4]])
+    # x_in = np.array([[2, 2, 2], [1, 1, 1]])
+    # la = np.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3], [3, 3, 3, 3]])
+    # dataset = FaultDataset(config, method='Split Standard Dim3 PCA')
+
     # dim_in = dataset.train_data.shape[-1]
     # train_set_size = dataset.train_data.shape[0]
     # test_set_size = dataset.test_data.shape[0]
@@ -361,3 +411,14 @@ if __name__ == '__main__':
     # x = x.contiguous().view(32, -1)
     # model = MLPClassification(544, dim3=True)
     # print(model(x).shape)
+
+    tep_dataset = TEPDataset(config)
+    tep_dataloader = DataLoader(tep_dataset, batch_size=10, shuffle=True)
+    for x, y in tep_dataloader:
+        shape = x.shape[0]
+        o = torch.zeros(shape, 21)
+        y = y.long()
+        print(y)
+        for index, y_ in enumerate(y):
+            o[index][y_-1] = 1
+        print(o)

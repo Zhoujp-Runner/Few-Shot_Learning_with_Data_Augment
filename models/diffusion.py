@@ -190,7 +190,10 @@ class DiffusionModel(object):
             variance = variance.unsqueeze(1)
         print("variance", variance)
 
-        return mean + torch.sqrt(variance) * noise
+        # t == 0 时刻， 没有噪声
+        nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))
+
+        return mean + nonzero_mask * torch.sqrt(variance) * noise
 
     def sample_loop(self,
                     model: MLPModel,

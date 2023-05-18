@@ -47,6 +47,16 @@ def plot_points(data, ax, color=('blue', 'red')):
         ax.scatter(data_augment_x, data_augment_y, c=data_augment_color)
 
 
+def unranked_unique(arr):
+    """
+    由于np.unique会自动排序，所以这里写一个不会自动排序的unique()
+    :param arr: 输入矩阵
+    :return: 保留顺序的unique矩阵
+    """
+    _, idx = np.unique(arr, return_index=True)
+    return arr[np.sort(idx)]
+
+
 if __name__ == '__main__':
     # with open("..\\configs\\config_0.yaml") as f:
     #     config = yaml.load(f, Loader=yaml.FullLoader)
@@ -273,22 +283,26 @@ if __name__ == '__main__':
     # plot_points(data, axes)
     # plt.show()
 
-    with open("..\\processed_data\\test\\augment\\1_TEP_20.pkl", 'rb') as f:
+    with open("..\\processed_data\\test\\augment\\11_TEP_60.pkl", 'rb') as f:
         datas = dill.load(f)
-    with open("..\\processed_data\\tep_train.pkl", 'rb') as f:
+    with open("..\\processed_data\\tep_train_lda_standard.pkl", 'rb') as f:
         source_datas = dill.load(f)
     batch_size = datas.shape[0]
-    datas = np.reshape(datas, (batch_size, 53))
-    data, label = np.split(datas, [52, ], axis=-1)
+    datas = np.reshape(datas, (batch_size, 17))
+    data, label = np.split(datas, [16, ], axis=-1)
+    print(data.shape)
+    print(label)
 
-    source_data, source_label = np.split(source_datas, [52, ], axis=-1)
-    source_label = np.squeeze(source_label, axis=-1)
-    lda = LinearDiscriminantAnalysis(n_components=4)
-    source_data = lda.fit_transform(source_data, source_label)
-    source_label = source_label[..., None]
-    source_datas = np.concatenate([source_data, source_label], axis=-1)
+    # source_data, source_label = np.split(source_datas, [52, ], axis=-1)
+    # source_label = np.squeeze(source_label, axis=-1)
+    # lda = LinearDiscriminantAnalysis(n_components=16)
+    # source_data = lda.fit_transform(source_data, source_label)
+    # source_label = source_label[..., None]
+    # source_datas = np.concatenate([source_data, source_label], axis=-1)
 
-    label = np.unique(label)
+    # label = np.unique(label)
+    label = unranked_unique(label)
+    print(label)
     expect_datas = []
     expect_labels = []
     index = np.arange(0, 480)
@@ -300,8 +314,8 @@ if __name__ == '__main__':
                 item = item[None, ]
                 data_list.append(item)
         expect_data = np.concatenate(data_list, axis=0)
-        indices = np.random.choice(index, 9)
-        labels = np.array([y]*9)
+        indices = np.random.choice(index, 60)
+        labels = np.array([y]*60)
         expect_labels.append(labels)
         expect_datas.append(expect_data[indices])
         # expect_datas.append(expect_data)
@@ -323,16 +337,36 @@ if __name__ == '__main__':
         # y3 = data_viz[1440:1920, 1]
         # x4 = data_viz[1920:2400, 0]
         # y4 = data_viz[1920:2400, 1]
-        x0 = data_viz[:9, 0]
-        y0 = data_viz[:9, 1]
-        x1 = data_viz[9:18, 0]
-        y1 = data_viz[9:18, 1]
-        x2 = data_viz[18:27, 0]
-        y2 = data_viz[18:27, 1]
-        x3 = data_viz[27:36, 0]
-        y3 = data_viz[27:36, 1]
-        x4 = data_viz[36:45, 0]
-        y4 = data_viz[36:45, 1]
+        # x0 = data_viz[:9, 0]
+        # y0 = data_viz[:9, 1]
+        # x1 = data_viz[9:18, 0]
+        # y1 = data_viz[9:18, 1]
+        # x2 = data_viz[18:27, 0]
+        # y2 = data_viz[18:27, 1]
+        # x3 = data_viz[27:36, 0]
+        # y3 = data_viz[27:36, 1]
+        # x4 = data_viz[36:45, 0]
+        # y4 = data_viz[36:45, 1]
+        x0 = data_viz[:60, 0]
+        y0 = data_viz[:60, 1]
+        x1 = data_viz[60:120, 0]
+        y1 = data_viz[60:120, 1]
+        x2 = data_viz[120:180, 0]
+        y2 = data_viz[120:180, 1]
+        x3 = data_viz[180:240, 0]
+        y3 = data_viz[180:240, 1]
+        x4 = data_viz[240:300, 0]
+        y4 = data_viz[240:300, 1]
+        # x0 = data_viz[:300, 0]
+        # y0 = data_viz[:300, 1]
+        # x1 = data_viz[300:600, 0]
+        # y1 = data_viz[300:600, 1]
+        # x2 = data_viz[600:900, 0]
+        # y2 = data_viz[600:900, 1]
+        # x3 = data_viz[900:1200, 0]
+        # y3 = data_viz[900:1200, 1]
+        # x4 = data_viz[1200:1500, 0]
+        # y4 = data_viz[1200:1500, 1]
         index = i - 1
         row_index = index // 6
         col_index = index % 6

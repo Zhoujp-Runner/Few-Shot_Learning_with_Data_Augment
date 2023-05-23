@@ -6,6 +6,8 @@
 """
 import os
 import numpy as np
+import torch
+import torch.nn.functional as F
 
 import yaml
 from easydict import EasyDict
@@ -13,7 +15,7 @@ import logging
 
 from process_data.dataset import FaultDataset, TEPDataset
 from models.diffusion import DiffusionModel
-from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel
+from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel, GuidedClassifier
 from process_data.augment import DataAugment
 from models.classification import TrainClassification
 
@@ -51,6 +53,7 @@ def get_config_list(all_config):
     config_updated["diffusion_model_root"] = all_config["diffusion_model"]["root"]
     config_updated["classification_model_root"] = all_config["classification_model"]["root"]
     config_updated.update(all_config["log"])
+    config_updated.update(all_config["classifier"])
     config_updated["ways_num"] = all_config["ways_num"]
     config_updated["information"] = all_config["information"]
     config_updated.update(all_config["diffusion_parameters"])
@@ -98,6 +101,21 @@ def set_log():
     return logger
 
 
+def get_classifier(config):
+    """加载classifier模型"""
+    # 参数要与classifier_train中的参数一致
+    classifier = GuidedClassifier(dim_in=16,
+                                  dim_hidden=256,
+                                  dim_out=21,
+                                  diffusion_num_step=50)
+
+    path = config["classifier_path"]
+    classifier_checkpoint = torch.load(path)
+    classifier_state_dict = classifier_checkpoint["model"]
+    classifier.load_state_dict(classifier_state_dict)
+    return classifier
+
+
 if __name__ == '__main__':
     test_config_path = "configs\\test_config.yaml"
     all_config = get_all_config(test_config_path)
@@ -107,6 +125,18 @@ if __name__ == '__main__':
     index = np.argmin(np.abs(epochs - 1534))
     test_logger = set_log()
     test_logger.info(f"total_time: {test_times}")
+
+    classifier = get_classifier(configs[0])
+    scale = configs[0]["classifier_scale"]
+
+    def condition_func(x_t, t, y=None):
+        assert y is not None
+        with torch.enable_grad():
+            x_in = x_t.detach().requires_grad_(True)
+            logits = classifier(x_in, t)
+            log_probs = F.log_softmax(logits, dim=-1)
+            selected = log_probs[range(len(logits)), y.view(-1)]
+            return torch.autograd.grad(selected.sum(), x_in)[0] * scale
 
     for idx, config in enumerate(configs):
 
@@ -164,7 +194,8 @@ if __name__ == '__main__':
                                      model_type=ada_model.type,
                                      ways=diffusion_dataset.ways,
                                      time=time,
-                                     dataset='Hydraulic')
+                                     dataset='Hydraulic',
+                                     guided_fn=condition_func)
                 print("=========================Augment done===========================")
 
                 print("=========================Classification===========================")
@@ -219,7 +250,8 @@ if __name__ == '__main__':
                                      model_type=ada_model.type,
                                      ways=diffusion_dataset.ways,
                                      time=time,
-                                     dataset='TEP')
+                                     dataset='TEP',
+                                     guided_fn=condition_func)
                 print("=========================Augment done===========================")
 
                 print("=========================Classification===========================")

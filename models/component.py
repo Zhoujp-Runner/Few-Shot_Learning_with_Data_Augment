@@ -154,14 +154,32 @@ class AdaEB(nn.Module):
         return out
 
 
+def time_embedding(time_steps):
+    """
+    正弦时间嵌入
+    :param time_steps : 时间矩阵
+    :return [cos(t), sin(t)]
+    """
+    if len(time_steps.shape) < 2:
+        time_steps = time_steps[..., None]
+    return torch.cat([torch.cos(time_steps), torch.sin(time_steps)], dim=-1)
+
+
 if __name__ == '__main__':
     # att = SelfAttention(dim_in=136, hidden_dim=256)
     # data = torch.randn(32, 17, 136)
     # out = att(data)
     # print(out.shape)
-    x = torch.randn(32, 64)
-    t = torch.randn(32, 1)
-    att = torch.randn(32, 4)
-    ada = AdaEB(64, 4)
-    print(ada(x, t, att).shape)
+
+    # x = torch.randn(32, 64)
+    # t = torch.randn(32, 1)
+    # att = torch.randn(32, 4)
+    # ada = AdaEB(64, 4)
+    # print(ada(x, t, att).shape)
+
+    x = torch.exp(
+        -math.log(10000)*torch.arange(0,0,dtype=torch.float32)
+    )
+    tim = torch.ones(10, 1)
+    print(time_embedding(tim))
 

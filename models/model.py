@@ -5,9 +5,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.component import ConcatSquashLinear
-from models.component import TransformerLayer
-from models.component import AdaEB
+from models.component import (
+    ConcatSquashLinear,
+    TransformerLayer,
+    AdaEB,
+    time_embedding
+)
 """
 1. 纯全连接神经网络
 2. 使用ConcatSquashLinear构建的全连接神经网络
@@ -215,6 +218,76 @@ class AdaModel(nn.Module):
         return out
 
 
+class GuidedClassifier(nn.Module):
+    def __init__(self,
+                 dim_in,
+                 dim_hidden,
+                 dim_out,
+                 diffusion_num_step):
+        """
+        用该分类器的梯度引导DDPM采样
+        :param dim_in: 输入维度
+        :param dim_hidden: 第一层的输出维度，也是time_embedding的维度
+        :param dim_out: 输出维度（即为类别数量）
+        :param diffusion_num_step: 扩散步骤
+        """
+        super(GuidedClassifier, self).__init__()
+        self.layers = nn.ModuleList(
+            [nn.Linear(dim_in, dim_hidden),
+             nn.SiLU(),
+             nn.Linear(dim_hidden, 2*dim_hidden),
+             nn.SiLU(),
+             nn.Linear(2*dim_hidden, 2*dim_hidden),
+             nn.SiLU(),
+             nn.Linear(2*dim_hidden, dim_hidden),
+             nn.SiLU()]
+        )
+        self.out_layer = nn.Linear(dim_hidden, dim_out)
+
+        # # 使用Embedding层作为嵌入表达
+        # self.t_emb = nn.ModuleList(
+        #     [nn.Embedding(diffusion_num_step, dim_hidden),
+        #      nn.Embedding(diffusion_num_step, 2*dim_hidden),
+        #      nn.Embedding(diffusion_num_step, 2*dim_hidden),
+        #      nn.Embedding(diffusion_num_step, dim_hidden)]
+        # )
+
+        self.time_emb = nn.Sequential(
+            nn.Linear(2, dim_hidden),
+            nn.SiLU(),
+            nn.Linear(dim_hidden, dim_hidden)
+        )
+
+        self.emb_layers = nn.ModuleList(
+            [nn.SiLU(),
+             nn.Linear(dim_hidden, dim_hidden*2),
+             nn.SiLU(),
+             nn.Linear(dim_hidden, dim_hidden*4),
+             nn.SiLU(),
+             nn.Linear(dim_hidden, dim_hidden*4),
+             nn.SiLU(),
+             nn.Linear(dim_hidden, dim_hidden*2)]
+        )
+
+    def forward(self, x, time_step):
+        # 检查batch_size是否匹配
+        # 检查维度数是否匹配
+        if len(time_step.shape) < 2:
+            time_step = time_step[..., None]
+
+        emb = self.time_emb(time_embedding(time_step))
+
+        for index in range(4):
+            x = self.layers[2 * index](x)
+            emb_out = self.emb_layers[2 * index](emb)
+            emb_out = self.emb_layers[2 * index + 1](emb_out)
+            scale, shift = torch.chunk(emb_out, 2, dim=-1)
+            x = x * (1 + scale) + shift
+            x = self.layers[2 * index + 1](x)
+
+        return self.out_layer(x)
+
+
 if __name__ == '__main__':
     # model = AttentionModel(64, 4)
     # input = torch.randn(32, 17, 64)
@@ -224,9 +297,14 @@ if __name__ == '__main__':
     # t = torch.randn(32, 1, 1)
     # out = model(input, t, attribute)
     # print(out.shape)
-    model = AdaModel(64, 128, 4)
-    input = torch.randn(32, 64)
-    attribute = torch.randn(32, 4)
-    t = torch.randn(32, 1)
-    print(model(input, t, attribute).shape)
+    # model = AdaModel(64, 128, 4)
+    # input = torch.randn(32, 64)
+    # attribute = torch.randn(32, 4)
+    # t = torch.randn(32, 1)
+    # print(model(input, t, attribute).shape)
+    model = GuidedClassifier(16, 32, 21, 50)
+    input = torch.randn(32, 16)
+    t = torch.ones(32).int()
+    out = model(input, t)
+    print(out.shape)
 

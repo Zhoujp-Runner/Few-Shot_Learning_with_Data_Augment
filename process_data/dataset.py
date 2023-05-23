@@ -369,6 +369,34 @@ class TEPDataset(Dataset):
         return self.len
 
 
+class GuidedDataset(Dataset):
+    def __init__(self,
+                 config):
+        super(GuidedDataset, self).__init__()
+        self.dataset_type = 'TEP'
+        self.config = config
+
+        self.source_path = config.tep_train_lda_standard_path
+        if not os.path.exists(self.source_path):
+            raise ValueError("There is not a such file of tep dataset!")
+        with open(self.source_path, 'rb') as f:
+            self.source_data = dill.load(f)
+
+        self.train_data = torch.FloatTensor(self.source_data)
+
+        self.len = len(self.train_data)
+
+    def __getitem__(self, item):
+        """返回数据和标签值"""
+        sample_with_label = self.train_data[item]
+        sample = sample_with_label[:-1]
+        label = sample_with_label[-1].int()
+        return sample, label
+
+    def __len__(self):
+        return self.len
+
+
 if __name__ == '__main__':
     with open("..\\configs\\config_0.yaml") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
@@ -399,18 +427,22 @@ if __name__ == '__main__':
     # print(test)
     # print(dele)
 
-    # TEP数据集
-    tep_dataset = TEPDataset(config, mode='test')
-    x, y = tep_dataset.__getitem__(0)
-    print(x)
-    print(y.type())
-    print(tep_dataset.__len__())
-    test_data = tep_dataset.test_data
-    # data, labels = torch.split(test_data, [52, 1], dim=-1)
-    # print(data.shape)
-    # print(labels)
-    # labels = labels.view(-1)
-    # print(labels)
-    # x = torch.IntTensor([1, 2, 3, 2, 1])
-    # y = torch.FloatTensor([1, 2, 5, 2, 1])
-    # print(torch.sum(x == y))
+    # # TEP数据集
+    # tep_dataset = TEPDataset(config, mode='test')
+    # x, y = tep_dataset.__getitem__(0)
+    # print(x)
+    # print(y.type())
+    # print(tep_dataset.__len__())
+    # test_data = tep_dataset.test_data
+    # # data, labels = torch.split(test_data, [52, 1], dim=-1)
+    # # print(data.shape)
+    # # print(labels)
+    # # labels = labels.view(-1)
+    # # print(labels)
+    # # x = torch.IntTensor([1, 2, 3, 2, 1])
+    # # y = torch.FloatTensor([1, 2, 5, 2, 1])
+    # # print(torch.sum(x == y))
+
+    # 引导分类器数据集
+    guided_dataset = GuidedDataset(config)
+    print(guided_dataset.__getitem__(0))

@@ -29,7 +29,15 @@ save_split_standard_pca_dim3_path: "..\\processed_data\\save_standard_split_pca_
 save_split_lda_standard_dim3_path: "..\\processed_data\\save_split_lda_standard_dim3.pkl"
 augment_data_root : "..\\processed_data\\test\\augment"
 tep_train_path : "..\\processed_data\\tep_train.pkl"
-tep_train_lda_standard_path : "..\\processed_data\\tep_train_lda_standard.pkl"
+tep_train_lda_standard_path : "processed_data\\tep_train_lda_standard.pkl"
+
+classifier_path : "experiment\\models\\classifier\\classifier.pkl"
+classifier_scale : 5
+
+#log
+diffusion_root : "experiments\\logs\\test\\diffusion"
+augment_root : "experiments\\logs\\test\\augment"
+classification_root : "experiments\\logs\\test\\classification"
 
 save_data_root : "..\\processed_data"
 augment_num : 20
@@ -49,9 +57,9 @@ save_log_path : "..\\experiments\\logs\\concat_linear3_with_split.log"
 save_model_root_path : "..\\experiments\\models"
 
 # diffusion_parameters
-num_diffusion_steps : 3000
-beta_start : 0.0001
-beta_end : 0.02
+num_diffusion_steps : 50
+beta_start : 0.00001
+beta_end : 0.005
 schedule_name : 'linear'
 
 # train_parameters
@@ -60,3 +68,5 @@ epochs : 2000
 batch_size : 512
 learning_rate : 5e-4
 device : 'cuda'
+
+dataset_type : 'TEP'

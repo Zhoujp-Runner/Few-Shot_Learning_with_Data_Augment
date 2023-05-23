@@ -26,7 +26,7 @@ log :
   classification_root : "experiments\\logs\\test\\classification"
 
 classifier:
-  classifier_path : "experiment\\models\\classifier\\classifier.pkl"
+  classifier_path : "experiments\\models\\classifier\\classifier.pkl"
   classifier_scale : 5
 
 # shots num and ways num

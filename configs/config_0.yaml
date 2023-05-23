@@ -31,7 +31,7 @@ augment_data_root : "..\\processed_data\\test\\augment"
 tep_train_path : "..\\processed_data\\tep_train.pkl"
 tep_train_lda_standard_path : "processed_data\\tep_train_lda_standard.pkl"
 
-classifier_path : "experiment\\models\\classifier\\classifier.pkl"
+classifier_path : "experiments\\models\\classifier\\classifier.pkl"
 classifier_scale : 5
 
 #log

@@ -52,7 +52,7 @@ class DataAugment(object):
         self.filehandle.setFormatter(self.formatter)
         self.logger.addHandler(self.filehandle)
 
-    def data_augment(self, dim_in, dim_condition, model_type, ways, time=0, dataset='Hydraulic'):
+    def data_augment(self, dim_in, dim_condition, model_type, ways, time=0, dataset='Hydraulic', guided_fn=None):
         """
         使用扩散模型生成新数据，用于数据增强
         """
@@ -155,7 +155,7 @@ class DataAugment(object):
         for attribute in attributes:
             attribute = attribute.unsqueeze(0)  # [1, attribute_dim]
             # TODO 这里对于每一个属性使用同一个diffusion model进行生成样本，是否有问题？
-            data = diffusion_model.sample_loop(model, augment_size, attribute=attribute)
+            data = diffusion_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn)
             if dataset == 'Hydraulic':
                 augment_attribute.append(attribute.expand(augment_size[0], 4).numpy())
             elif dataset == 'TEP':

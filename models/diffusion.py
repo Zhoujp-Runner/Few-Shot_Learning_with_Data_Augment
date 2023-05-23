@@ -143,19 +143,42 @@ class DiffusionModel(object):
                 and np.max(self.sqrt_recip_alphas_cumprod_minus_one) >= 1:
             raise ValueError("some schedule may be wrong!")
 
+    @staticmethod
+    def guided_mean(guided_fn,
+                    p_mean,
+                    p_variance,
+                    x_t,
+                    t,
+                    label):
+        """用分类器的梯度引导逆扩散过程中的均值变化
+
+        :param guided_fn: 能够得到分类器梯度的函数
+        :param p_mean: 逆扩散采样过程中的均值
+        :param p_variance: 逆扩散过程中的方差
+        :param x_t: t时刻的数据
+        :param t: t时刻
+        :param label: 样本的类别
+        :return: 调整后的均值
+        """
+        gradient = guided_fn(x_t, t, label)
+        adjusted_mean = p_mean.float() + p_variance * gradient.float()
+        return adjusted_mean
+
     def sample_from_posterior(self,
                               model: MLPModel,
                               x_t,
                               t,
-                              attribute=None):
-        """
-        根据后验分布，以及t时刻神经网络模型p的预测值，得到t-1时刻的数据分布并采样
+                              attribute=None,
+                              guided_fn=None):
+        """根据后验分布，以及t时刻神经网络模型p的预测值，得到t-1时刻的数据分布并采样
         即 q(x_t-1 | x_t, x_0)
+
         :param model: 神经网络模型
         :param x_t: 第t时刻的数据 [batch_size, dim]
         :param t: 时间步 [batch_size, 1]
-        :param attribute: 属性矩阵
-        :return:
+        :param attribute: 属性矩阵, 即为label
+        :param guided_fn: 分类器梯度函数，如果不为None，说明需要用分类器梯度引导均值
+        :return: q(x_t-1 | x_t, x_0)
         """
         # 高斯噪声采样
         noise = torch.randn_like(x_t).to(self.device)
@@ -190,6 +213,20 @@ class DiffusionModel(object):
             variance = variance.unsqueeze(1)
         print("variance", variance)
 
+        # 使用分类器梯度修正mean
+        if guided_fn is not None:
+            if attribute is None:
+                raise ValueError("Please input the label!")
+            if attribute.shape[0] != x_t.shape[0]:
+                raise ValueError("The shape of label does not match to the shape of x_t!")
+
+            mean = self.guided_mean(guided_fn=guided_fn,
+                                    p_mean=mean,
+                                    p_variance=variance,
+                                    x_t=x_t,
+                                    t=t,
+                                    label=attribute)
+
         # t == 0 时刻， 没有噪声
         nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))
 
@@ -198,12 +235,16 @@ class DiffusionModel(object):
     def sample_loop(self,
                     model: MLPModel,
                     shape,
-                    attribute=None):
-        """
-        循环采样，逆扩散过程
+                    attribute=None,
+                    guided_fn=None,
+                    ):
+        """循环采样，逆扩散过程
         x_t -> x_t-1 -> x_t-2 -> ... -> x_0
+
         :param model: 神经网络模型
         :param shape: 待生成的样本的形状
+        :param attribute: 属性矩阵, 即为label
+        :param guided_fn: 分类器梯度函数，如果不为None，说明需要用分类器梯度引导均值
         :return: 生成的样本，即x_0
         """
         # 生成最初的噪声
@@ -226,7 +267,8 @@ class DiffusionModel(object):
                 x_t_minus_1 = self.sample_from_posterior(model,
                                                          x_t,
                                                          t,
-                                                         attribute)
+                                                         attribute,
+                                                         guided_fn)
                 self.sample_list.append(x_t_minus_1)
                 x_t = x_t_minus_1
 
@@ -236,9 +278,9 @@ class DiffusionModel(object):
                             x_0: torch.Tensor,
                             t,
                             noise):
-        """
-        扩散过程，获得第t步的数据
+        """扩散过程，获得第t步的数据
         即q(x_t | x_0)
+
         :param x_0: 初始数据
         :param t: 时间步t
         :param noise: 噪声
@@ -288,8 +330,8 @@ class DiffusionModel(object):
               dataset,
               model,
               time=0):
-        """
-        训练模型
+        """训练模型
+
         :param dataset: 数据集
         :param model: 模型
         :param time: 第几次循环
@@ -401,5 +443,4 @@ if __name__ == '__main__':
 
     # indi = list(range(100))[::-1]
     # print(indi)
-
 

@@ -29,9 +29,11 @@ save_split_standard_pca_dim3_path: "..\\processed_data\\save_standard_split_pca_
 save_split_lda_standard_dim3_path: "..\\processed_data\\save_split_lda_standard_dim3.pkl"
 augment_data_root : "..\\processed_data\\test\\augment"
 tep_train_path : "..\\processed_data\\tep_train.pkl"
-tep_train_lda_standard_path : "processed_data\\tep_train_lda_standard.pkl"
+#tep_train_lda_standard_path : "processed_data\\tep_train_lda_standard.pkl"
+tep_train_lda_standard_path : "processed_data\\tep_train_lda_zscore_standard.pkl"
 
-classifier_path : "experiments\\models\\classifier\\classifier.pkl"
+#classifier_path : "experiments\\models\\classifier\\classifier.pkl"
+classifier_path : "experiments\\models\\classifier\\classifier_zscore.pkl"
 classifier_scale : 5
 
 #log

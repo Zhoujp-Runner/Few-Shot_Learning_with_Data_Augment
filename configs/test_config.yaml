@@ -9,7 +9,8 @@ data :
   save_split_lda_standard_path : "processed_data\\save_split_lda_standard.pkl"
   save_split_lda_standard_dim3_path: "processed_data\\save_split_lda_standard_dim3.pkl"
   tep_train_path : "processed_data\\tep_train.pkl"
-  tep_train_lda_standard_path : "processed_data\\tep_train_lda_standard.pkl"
+#  tep_train_lda_standard_path : "processed_data\\tep_train_lda_standard.pkl"
+  tep_train_lda_standard_path : "processed_data\\tep_train_lda_zscore_standard.pkl"
 augment :
 #  lda_root : "..\\processed_data\\test\\lda_augment"
 #  pca_root : "..\\processed_data\\test\\pca_augment"
@@ -26,11 +27,12 @@ log :
   classification_root : "experiments\\logs\\test\\classification"
 
 classifier:
-  classifier_path : "experiments\\models\\classifier\\classifier.pkl"
+#  classifier_path : "experiments\\models\\classifier\\classifier.pkl"
+  classifier_path : "experiments\\models\\classifier\\classifier_zscore.pkl"
   classifier_scale : 5
 
 # shots num and ways num
-shots_num : [10, 20, 30, 40, 50]
+shots_num : [1, 3, 5, 7, 9, 11]
 ways_num : 5
 
 # attribute information

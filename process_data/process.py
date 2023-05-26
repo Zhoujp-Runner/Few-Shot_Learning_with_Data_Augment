@@ -18,7 +18,7 @@ import yaml
 from easydict import EasyDict
 from itertools import product
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from analysis import dim_decay, attribute_standard
 
@@ -311,12 +311,13 @@ def process_tep():
     source_label = np.squeeze(source_label, axis=-1)
     lda = LinearDiscriminantAnalysis(n_components=16)
     source_data = lda.fit_transform(source_data, source_label)
-    scaler = MinMaxScaler()
+    # scaler = MinMaxScaler()
+    scaler = StandardScaler()
     source_data = scaler.fit_transform(source_data)
     source_label = source_label[..., None]
     source_datas = np.concatenate([source_data, source_label], axis=-1)
 
-    save_path = r"..\processed_data\tep_train_lda_standard.pkl"
+    save_path = r"..\processed_data\tep_train_lda_zscore_standard.pkl"
     with open(save_path, 'wb') as f:
         dill.dump(source_datas, f)
 
@@ -389,4 +390,7 @@ if __name__ == '__main__':
     #     values.append(value)
     # datas = np.concatenate(values, axis=0)
 
-    process_tep()
+    # process_tep()
+    with open(r"..\processed_data\tep_train_lda_zscore_standard.pkl", 'rb') as f:
+        d = dill.load(f)
+    print(d.shape)

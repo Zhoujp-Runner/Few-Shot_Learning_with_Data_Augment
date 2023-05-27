@@ -218,14 +218,17 @@ class DiffusionModel(object):
             if attribute is None:
                 raise ValueError("Please input the label!")
             if attribute.shape[0] != x_t.shape[0]:
-                raise ValueError("The shape of label does not match to the shape of x_t!")
+                attribute = attribute.expand(attribute.shape[0])
+            label = attribute - 1  # TEP数据集的原因
+            if label.dtype != torch.long:
+                label = label.long()
 
             mean = self.guided_mean(guided_fn=guided_fn,
                                     p_mean=mean,
                                     p_variance=variance,
                                     x_t=x_t,
                                     t=t,
-                                    label=attribute)
+                                    label=label)
 
         # t == 0 时刻， 没有噪声
         nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))
@@ -422,25 +425,27 @@ class DiffusionModel(object):
 
 
 if __name__ == '__main__':
-    with open("..\\configs\\config_0.yaml") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-
-    config = EasyDict(config)
-
-    # input = torch.Tensor(100, 64)
-    # time = torch.ones((100, 1), dtype=torch.int)
-    # att = torch.ones((100, 4), dtype=torch.float)
-    # model = MLPModel(64, 1000)
-    # x = model(input, time, att)
-    # print(x.shape)
-    # x = torch.rand((64, 64))
-    dif = DiffusionModel(config)
-    # print(dif.diffusion_at_time_t(x, 10).shape)
-    dataset = FaultDataset(config, method='Standard PCA')
-    model = MLPModel(64, 3000)
-    concat_model = ConcatModel(dim_in=136, dim_condition=4)
-    dif.train(dataset, concat_model)
-
-    # indi = list(range(100))[::-1]
-    # print(indi)
+    # with open("..\\configs\\config_0.yaml") as f:
+    #     config = yaml.load(f, Loader=yaml.FullLoader)
+    #
+    # config = EasyDict(config)
+    #
+    # # input = torch.Tensor(100, 64)
+    # # time = torch.ones((100, 1), dtype=torch.int)
+    # # att = torch.ones((100, 4), dtype=torch.float)
+    # # model = MLPModel(64, 1000)
+    # # x = model(input, time, att)
+    # # print(x.shape)
+    # # x = torch.rand((64, 64))
+    # dif = DiffusionModel(config)
+    # # print(dif.diffusion_at_time_t(x, 10).shape)
+    # dataset = FaultDataset(config, method='Standard PCA')
+    # model = MLPModel(64, 3000)
+    # concat_model = ConcatModel(dim_in=136, dim_condition=4)
+    # dif.train(dataset, concat_model)
+    #
+    # # indi = list(range(100))[::-1]
+    # # print(indi)
+    t = torch.LongTensor([1])
+    print(t.dtype == torch.long)
 

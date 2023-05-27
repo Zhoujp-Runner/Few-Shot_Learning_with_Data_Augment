@@ -126,7 +126,7 @@ if __name__ == '__main__':
     test_logger = set_log()
     test_logger.info(f"total_time: {test_times}")
 
-    classifier = get_classifier(configs[0])
+    classifier = get_classifier(configs[0]).to(configs[0]["device"])
     scale = configs[0]["classifier_scale"]
 
     def condition_func(x_t, t, y=None):
@@ -282,6 +282,8 @@ if __name__ == '__main__':
         print(f"min_augment_accuracy: {min_augment_accuracy}")
         print(f"min_augment_ways: {min_augment_ways}")
 
+        if condition_func is not None:
+            test_logger.info("Guided diffusion...")
         test_logger.info(f"------------------Average Result------------------")
         test_logger.info(f"shots_num: {config.shots_num}")
         test_logger.info(f"ways_num: {config.ways_num}")

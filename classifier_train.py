@@ -19,6 +19,10 @@ from process_data.dataset import GuidedDataset
 guided v1.0
 hidden 256 > 128 > 64 > 32
 best performance loss = 2.75 - 2.8
+
+hidden 256
+dataset z score standard
+best performance loss = 1.6 - 1.7
 """
 
 

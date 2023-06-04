@@ -22,7 +22,7 @@ save_path : "..\\processed_data\\data_dict.pkl"
 save_lda_path : "..\\processed_data\\data_after_lda.pkl"
 save_pca_path : "..\\processed_data\\data_after_pca.pkl"
 save_standard_pca_path : "..\\processed_data\\standard_data_after_pca.pkl"
-save_lda_standard_path : "..\\processed_data\\save_lda_standard.pkl"
+save_lda_standard_path : "..\\processed_data\\save_lda_zscore_standard.pkl"
 save_standard_split_pca_path : "..\\processed_data\\save_standard_split_pca.pkl"
 save_split_lda_standard_path : "..\\processed_data\\save_split_lda_standard.pkl"
 save_split_standard_pca_dim3_path: "..\\processed_data\\save_standard_split_pca_dim3.pkl"
@@ -30,10 +30,10 @@ save_split_lda_standard_dim3_path: "..\\processed_data\\save_split_lda_standard_
 augment_data_root : "..\\processed_data\\test\\augment"
 tep_train_path : "..\\processed_data\\tep_train.pkl"
 #tep_train_lda_standard_path : "processed_data\\tep_train_lda_standard.pkl"
-tep_train_lda_standard_path : "processed_data\\tep_train_lda_zscore_standard.pkl"
+tep_train_lda_standard_path : "..\\processed_data\\tep_train_lda_zscore_standard.pkl"
 
 #classifier_path : "experiments\\models\\classifier\\classifier.pkl"
-classifier_path : "experiments\\models\\classifier\\classifier_zscore.pkl"
+classifier_path : "experiments\\models\\classifier\\Hydraulic_classifier_zscore.pkl"
 classifier_scale : 5
 
 #log

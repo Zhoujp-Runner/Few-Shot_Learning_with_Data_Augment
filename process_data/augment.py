@@ -15,7 +15,7 @@ from itertools import product
 
 from models.diffusion import DiffusionModel
 from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel
-from process_data.analysis import attribute_standard
+from process_data.analysis import information_standard, transform_attribute_to_label
 
 
 class DataAugment(object):
@@ -52,7 +52,7 @@ class DataAugment(object):
         self.filehandle.setFormatter(self.formatter)
         self.logger.addHandler(self.filehandle)
 
-    def data_augment(self, dim_in, dim_condition, model_type, ways, time=0, dataset='Hydraulic', guided_fn=None):
+    def data_augment(self, dim_in, dim_condition, dim_hidden, model_type, ways, time=0, dataset='Hydraulic', guided_fn=None):
         """
         使用扩散模型生成新数据，用于数据增强
         """
@@ -111,7 +111,7 @@ class DataAugment(object):
 
             # 加载预测模型
             model = AdaModel(dim_in=dim_in,
-                             dim_hidden=64,
+                             dim_hidden=dim_hidden,
                              attribute_dim=dim_condition,
                              num_steps=self.config.num_diffusion_steps,
                              dataset=dataset)
@@ -143,6 +143,8 @@ class DataAugment(object):
         # # attributes = attributes[:5]  # TODO 只生成前5个类别
         if dataset == 'Hydraulic':
             attributes = torch.FloatTensor(ways)  # 需要生成的类别
+            information = information_standard(self.config.information)
+            label = transform_attribute_to_label(attributes, information)[..., None]
         elif dataset == 'TEP':
             attributes = torch.IntTensor(ways)  # 需要生成的类别
         else:
@@ -152,13 +154,14 @@ class DataAugment(object):
         # 扩增数据集
         augment_data = []
         augment_attribute = []
-        for attribute in attributes:
+        for idx, attribute in enumerate(attributes):
             attribute = attribute.unsqueeze(0)  # [1, attribute_dim]
             # TODO 这里对于每一个属性使用同一个diffusion model进行生成样本，是否有问题？
-            data = diffusion_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn)
             if dataset == 'Hydraulic':
+                data = diffusion_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn, label=label[idx])
                 augment_attribute.append(attribute.expand(augment_size[0], 4).numpy())
             elif dataset == 'TEP':
+                data = diffusion_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn)
                 augment_attribute.append(attribute.expand(augment_size[0], 1).numpy())
             augment_data.append(data.cpu().numpy())
         augment_data = np.concatenate(augment_data, axis=0)  # [100*class_num, dim]

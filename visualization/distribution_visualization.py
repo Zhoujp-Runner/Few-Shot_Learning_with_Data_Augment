@@ -283,7 +283,7 @@ if __name__ == '__main__':
     # plot_points(data, axes)
     # plt.show()
 
-    with open("..\\processed_data\\test\\augment\\11_TEP_60.pkl", 'rb') as f:
+    with open("..\\processed_data\\test\\augment\\9_TEP_60.pkl", 'rb') as f:
         datas = dill.load(f)
     with open("..\\processed_data\\tep_train_lda_standard.pkl", 'rb') as f:
         source_datas = dill.load(f)

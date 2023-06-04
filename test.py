@@ -104,9 +104,9 @@ def set_log():
 def get_classifier(config):
     """加载classifier模型"""
     # 参数要与classifier_train中的参数一致
-    classifier = GuidedClassifier(dim_in=16,
+    classifier = GuidedClassifier(dim_in=64,
                                   dim_hidden=256,
-                                  dim_out=21,
+                                  dim_out=144,
                                   diffusion_num_step=50)
 
     path = config["classifier_path"]
@@ -164,6 +164,7 @@ if __name__ == '__main__':
                                                  use_random_combination=True)
                 dim_in = diffusion_dataset.train_data.shape[-1]
                 dim_condition = diffusion_dataset.train_attribute.shape[-1]
+                dim_hidden = 128
                 linear_model = MLPModel(input_dim=dim_in,
                                         num_steps=diffusion_model.num_diffusion_steps)
                 concat_model = ConcatModel(dim_in=dim_in,
@@ -171,7 +172,7 @@ if __name__ == '__main__':
                 attention_model = AttentionModel(dim_in=dim_in,
                                                  dim_condition=dim_condition)
                 ada_model = AdaModel(dim_in=dim_in,
-                                     dim_hidden=128,
+                                     dim_hidden=dim_hidden,
                                      attribute_dim=dim_condition,
                                      num_steps=diffusion_model.num_diffusion_steps,
                                      dataset='Hydraulic')
@@ -191,6 +192,7 @@ if __name__ == '__main__':
                 augment = DataAugment(config, min_epoch)
                 augment.data_augment(dim_in=dim_in,
                                      dim_condition=dim_condition,
+                                     dim_hidden=dim_hidden,
                                      model_type=ada_model.type,
                                      ways=diffusion_dataset.ways,
                                      time=time,
@@ -233,9 +235,10 @@ if __name__ == '__main__':
                 dim_in = diffusion_dataset.train_data.shape[-1] - 1
                 # 要求将1维的类别信息编码成dim_condition维的向量
                 dim_condition = 32
+                dim_hidden = 64
 
                 ada_model = AdaModel(dim_in=dim_in,
-                                     dim_hidden=64,
+                                     dim_hidden=dim_hidden,
                                      attribute_dim=dim_condition,
                                      num_steps=diffusion_model.num_diffusion_steps,
                                      dataset='TEP')
@@ -247,6 +250,7 @@ if __name__ == '__main__':
                 augment = DataAugment(config, min_epoch)
                 augment.data_augment(dim_in=dim_in,
                                      dim_condition=dim_condition,
+                                     dim_hidden=dim_hidden,
                                      model_type=ada_model.type,
                                      ways=diffusion_dataset.ways,
                                      time=time,

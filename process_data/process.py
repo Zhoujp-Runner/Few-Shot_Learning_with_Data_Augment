@@ -323,10 +323,10 @@ def process_tep():
 
 
 if __name__ == '__main__':
-    # with open("..\\configs\\config_0.yaml") as f:
-    #     config = yaml.load(f, Loader=yaml.FullLoader)
-    #
-    # config = EasyDict(config)
+    with open("..\\configs\\config_0.yaml") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    config = EasyDict(config)
     # information = config["information"]
     # text_list = config["text_list"]
     # dataset_root_path = config["dataset_root_path"]
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     # # print(save_dict)
     # # print(attr)
 
-    # process(config, split=False, dim3=False, standard=False)
+    # process(config, split=False, dim3=False, standard=True)
     # path = "..\\processed_data\\5ways_LDA.pkl"
     # with open(path, 'rb') as f:
     #     data = dill.load(f)
@@ -391,6 +391,6 @@ if __name__ == '__main__':
     # datas = np.concatenate(values, axis=0)
 
     # process_tep()
-    with open(r"..\processed_data\tep_train_lda_zscore_standard.pkl", 'rb') as f:
+    with open(r"..\processed_data\save_lda_zscore_standard.pkl", 'rb') as f:
         d = dill.load(f)
-    print(d.shape)
+    print(type(d["attribute"]))

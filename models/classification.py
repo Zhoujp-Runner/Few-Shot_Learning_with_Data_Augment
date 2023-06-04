@@ -311,11 +311,12 @@ class TrainClassification(object):
     def test(self, data_set, dim_in, model=None, load_path=None):
         with torch.no_grad():
             # 确保数据集不会进行两次标签转换
-            if not self.is_transform and data_set.dataset_type == 'Hydraulic':
-                information = information_standard(self.config.information)
-                label_1d_test = transform_attribute_to_label(data_set.test_attribute, information)
-                data_set.test_attribute = torch.FloatTensor(label_1d_test)
-                self.is_transform = True
+            if data_set.dataset_type == 'Hydraulic':
+                if not self.is_transform:
+                    information = information_standard(self.config.information)
+                    label_1d_test = transform_attribute_to_label(data_set.test_attribute, information)
+                    data_set.test_attribute = torch.FloatTensor(label_1d_test)
+                    self.is_transform = True
 
                 data = data_set.test_data  # [batch_size, 64]
                 labels = data_set.test_attribute  # [batch_size, 144]

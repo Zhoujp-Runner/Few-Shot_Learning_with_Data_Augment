@@ -5,7 +5,7 @@ data :
   save_standard_pca_path: "processed_data\\standard_data_after_pca.pkl"
   save_split_standard_pca_path: "processed_data\\save_standard_split_pca.pkl"
   save_split_standard_pca_dim3_path: "processed_data\\save_standard_split_pca_dim3.pkl"
-  save_lda_standard_path : "processed_data\\save_lda_standard.pkl"
+  save_lda_standard_path : "processed_data\\save_lda_zscore_standard.pkl"
   save_split_lda_standard_path : "processed_data\\save_split_lda_standard.pkl"
   save_split_lda_standard_dim3_path: "processed_data\\save_split_lda_standard_dim3.pkl"
   tep_train_path : "processed_data\\tep_train.pkl"
@@ -28,7 +28,7 @@ log :
 
 classifier:
 #  classifier_path : "experiments\\models\\classifier\\classifier.pkl"
-  classifier_path : "experiments\\models\\classifier\\classifier_zscore.pkl"
+  classifier_path : "experiments\\models\\classifier\\Hydraulic_classifier_zscore.pkl"
   classifier_scale : 5
 
 # shots num and ways num
@@ -59,4 +59,4 @@ train_parameters :
 
 #augment_num : 20
 augment_num : 60
-dataset_type : 'TEP'
+dataset_type : 'Hydraulic'

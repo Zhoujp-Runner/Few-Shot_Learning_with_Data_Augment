@@ -16,6 +16,8 @@ from process_data.dataset import GuidedDataset
 
 
 """
+dataset_type: TEP
+
 guided v1.0
 hidden 256 > 128 > 64 > 32
 best performance loss = 2.75 - 2.8
@@ -25,15 +27,29 @@ dataset z score standard
 best performance loss = 1.6 - 1.7
 """
 
+"""
+dataset_type: Hydraulic
+
+guided v1.0
+hidden 256 > 128 > 64
+best performance loss = 0.5 - 1.0 closer to 0.5
+"""
+
 
 def main():
+    dataset_type = 'Hydraulic'
     path = f"configs\\config_0.yaml"
     config = load_config(path)
     classifier_path = config.classifier_path
 
-    dataset = GuidedDataset(config)
+    dataset = GuidedDataset(config, dataset_type)
     dim_in = dataset.train_data.shape[-1] - 1
-    dim_out = 21  # TEP数据集一共有21种故障状态
+    if dataset.dataset_type == 'TEP':
+        dim_out = 21  # TEP数据集一共有21种故障状态
+    elif dataset.dataset_type == 'Hydraulic':
+        dim_out = 144  # 液压系统数据集一共有144种故障状态
+    else:
+        raise ValueError("No such dataset type!")
     dim_hidden = 256
     batch_size = 64
     epochs = 2000
@@ -66,7 +82,7 @@ def main():
             time_steps = diffusion.sample_t(size)
             noise = torch.randn_like(batch)
             x_t = diffusion.diffusion_at_time_t(batch, time_steps, noise)
-            label = label_to_onehot(label).to(diffusion.device)
+            label = label_to_onehot(label, dim_out).to(diffusion.device)
 
             out = classifier(x_t, time_steps)
 
@@ -84,13 +100,16 @@ def main():
         loss_mean = total_loss / len(dataloader)
         viz.line(X=[epoch], Y=[loss_mean], win="mean loss", update='append')
 
+    classifier_root = r"experiments\\models\\classifier"
+    classifier_name = f"Hydraulic_classifier_zscore_dimhidden{dim_hidden}.pkl"
+    save_path = os.path.join(classifier_root, classifier_name)
     if min_classifier_dict is not None:
         check_point = {
             "model": min_classifier_dict,
             "optimizer": opt_state_dict,
             "epoch": min_epoch
         }
-        torch.save(check_point, classifier_path)
+        torch.save(check_point, save_path)
 
 
 def load_config(path):
@@ -102,10 +121,10 @@ def load_config(path):
     return config
 
 
-def label_to_onehot(label):
+def label_to_onehot(label, dim_out):
     """针对TEP数据集"""
     batch_size = label.shape[0]
-    onehot = torch.zeros(batch_size, 21)
+    onehot = torch.zeros(batch_size, dim_out)
     for index, y in enumerate(label):
         onehot[index][y - 1] = 1
     return onehot

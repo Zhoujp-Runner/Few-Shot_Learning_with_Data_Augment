@@ -169,7 +169,8 @@ class DiffusionModel(object):
                               x_t,
                               t,
                               attribute=None,
-                              guided_fn=None):
+                              guided_fn=None,
+                              label=None):
         """根据后验分布，以及t时刻神经网络模型p的预测值，得到t-1时刻的数据分布并采样
         即 q(x_t-1 | x_t, x_0)
 
@@ -178,6 +179,7 @@ class DiffusionModel(object):
         :param t: 时间步 [batch_size, 1]
         :param attribute: 属性矩阵, 即为label
         :param guided_fn: 分类器梯度函数，如果不为None，说明需要用分类器梯度引导均值
+        :param label: 液压数据集的一维label
         :return: q(x_t-1 | x_t, x_0)
         """
         # 高斯噪声采样
@@ -215,13 +217,19 @@ class DiffusionModel(object):
 
         # 使用分类器梯度修正mean
         if guided_fn is not None:
-            if attribute is None:
-                raise ValueError("Please input the label!")
-            if attribute.shape[0] != x_t.shape[0]:
-                attribute = attribute.expand(attribute.shape[0])
-            label = attribute - 1  # TEP数据集的原因
-            if label.dtype != torch.long:
-                label = label.long()
+            if label is None:  # TEP数据集
+                if attribute is None:
+                    raise ValueError("Please input the label!")
+                if attribute.shape[0] != x_t.shape[0]:
+                    attribute = attribute.expand(attribute.shape[0])
+                label = attribute - 1  # TEP数据集的原因
+                if label.dtype != torch.long:
+                    label = label.long()
+            else:  # 液压数据集
+                if label.shape[0] != x_t.shape[0]:
+                    label = label.expand(label.shape[0])
+                if label.dtype != torch.long:
+                    label = label.long()
 
             mean = self.guided_mean(guided_fn=guided_fn,
                                     p_mean=mean,
@@ -229,6 +237,7 @@ class DiffusionModel(object):
                                     x_t=x_t,
                                     t=t,
                                     label=label)
+
 
         # t == 0 时刻， 没有噪声
         nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))
@@ -240,14 +249,16 @@ class DiffusionModel(object):
                     shape,
                     attribute=None,
                     guided_fn=None,
+                    label=None
                     ):
         """循环采样，逆扩散过程
         x_t -> x_t-1 -> x_t-2 -> ... -> x_0
 
         :param model: 神经网络模型
         :param shape: 待生成的样本的形状
-        :param attribute: 属性矩阵, 即为label
+        :param attribute: 属性矩阵, 对于TEP数据集来说即为label
         :param guided_fn: 分类器梯度函数，如果不为None，说明需要用分类器梯度引导均值
+        :param label: 由于液压数据集的attribute是四维的，不能直接用作label，所以，当数据集是液压数据集时，需要相应传入一维的向量
         :return: 生成的样本，即x_0
         """
         # 生成最初的噪声
@@ -271,7 +282,8 @@ class DiffusionModel(object):
                                                          x_t,
                                                          t,
                                                          attribute,
-                                                         guided_fn)
+                                                         guided_fn,
+                                                         label)
                 self.sample_list.append(x_t_minus_1)
                 x_t = x_t_minus_1
 

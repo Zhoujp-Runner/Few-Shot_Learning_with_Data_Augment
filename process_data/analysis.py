@@ -154,9 +154,9 @@ def dim_decay(data_dict, information, dim_out=64, method=None, standard=True):
 
     if standard:
         # data_dim_decay = data_standard(data_dim_decay)
-        # standardscaler = StandardScaler()
-        scaler = MinMaxScaler()
-        data_dim_decay = scaler.fit_transform(data_dim_decay)
+        standardscaler = StandardScaler()
+        # scaler = MinMaxScaler()
+        data_dim_decay = standardscaler.fit_transform(data_dim_decay)
     attribute = attribute_standard(attribute, information)
 
     data_dict_af_dim_decay = {

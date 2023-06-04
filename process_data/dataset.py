@@ -16,7 +16,7 @@ from easydict import EasyDict
 from itertools import product
 from sklearn.preprocessing import MinMaxScaler
 
-from process_data.analysis import attribute_standard
+from process_data.analysis import attribute_standard, information_standard, transform_attribute_to_label
 
 
 class FaultDataset(Dataset):
@@ -371,18 +371,33 @@ class TEPDataset(Dataset):
 
 class GuidedDataset(Dataset):
     def __init__(self,
-                 config):
+                 config,
+                 dataset_type):
         super(GuidedDataset, self).__init__()
-        self.dataset_type = 'TEP'
+        self.dataset_type = dataset_type
         self.config = config
 
-        self.source_path = config.tep_train_lda_standard_path
+        if dataset_type == 'TEP':
+            self.source_path = config.tep_train_lda_standard_path
+        elif dataset_type == 'Hydraulic':
+            self.source_path = config.save_lda_standard_path
+        else:
+            raise ValueError("No such dataset type")
+
         if not os.path.exists(self.source_path):
             raise ValueError("There is not a such file of tep dataset!")
         with open(self.source_path, 'rb') as f:
             self.source_data = dill.load(f)
 
-        self.train_data = torch.FloatTensor(self.source_data)
+        if dataset_type == 'TEP':
+            self.train_data = torch.FloatTensor(self.source_data)
+        elif dataset_type == 'Hydraulic':
+            self.data = torch.FloatTensor(self.source_data["data"])
+            self.attribute = self.source_data["attribute"]
+            information = information_standard(self.config.information)
+            self.label_1d = transform_attribute_to_label(self.attribute, information)
+            self.label_1d = self.label_1d[..., None]
+            self.train_data = torch.cat([self.data, self.label_1d], dim=-1)
 
         self.len = len(self.train_data)
 
@@ -403,9 +418,12 @@ if __name__ == '__main__':
 
     config = EasyDict(config)
     # # 液压数据集
-    # dataset = FaultDataset(config, method='LDA', use_random_combination=True)
+    # dataset = FaultDataset(config, method='LDA Standard', use_random_combination=True)
     # dataset2 = FaultDataset(config, method='LDA', ways=dataset.ways, use_random_combination=True)
-    # print(dataset.ways)
+    # print(type(dataset.ways))
+    # inf = information_standard(config.information)
+    # label = transform_attribute_to_label(dataset.ways, inf)
+    # print(label)
     # print(dataset2.ways)
     # print(dataset.train_data)
     # print(dataset2.train_data)
@@ -429,6 +447,11 @@ if __name__ == '__main__':
 
     # # TEP数据集
     # tep_dataset = TEPDataset(config, mode='test')
+    # way = torch.FloatTensor(tep_dataset.ways)
+    # for w in way:
+    #     w = w.unsqueeze(0)
+    #     w = w.expand(10, 1)
+    #     print(w)
     # x, y = tep_dataset.__getitem__(0)
     # print(x)
     # print(y.type())
@@ -443,6 +466,9 @@ if __name__ == '__main__':
     # # y = torch.FloatTensor([1, 2, 5, 2, 1])
     # # print(torch.sum(x == y))
 
-    # 引导分类器数据集
-    guided_dataset = GuidedDataset(config)
-    print(guided_dataset.__getitem__(0))
+    # # 引导分类器数据集
+    # guided_dataset = GuidedDataset(config, 'Hydraulic')
+    # print(guided_dataset.len)
+    # print(guided_dataset.__getitem__(999))
+    # print(guided_dataset.train_data.shape)
+    # print(guided_dataset.label_1d[0])

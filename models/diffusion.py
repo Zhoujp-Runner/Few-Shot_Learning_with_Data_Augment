@@ -238,7 +238,6 @@ class DiffusionModel(object):
                                     t=t,
                                     label=label)
 
-
         # t == 0 时刻， 没有噪声
         nonzero_mask = (t != 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))
 

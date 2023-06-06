@@ -29,7 +29,7 @@ log :
 classifier:
 #  classifier_path : "experiments\\models\\classifier\\classifier.pkl"
   classifier_path : "experiments\\models\\classifier\\Hydraulic_classifier_zscore.pkl"
-  classifier_scale : 5
+  classifier_scale : 10
 
 # shots num and ways num
 shots_num : [1, 3, 5, 7, 9, 11]
@@ -59,4 +59,4 @@ train_parameters :
 
 #augment_num : 20
 augment_num : 60
-dataset_type : 'Hydraulic'
+dataset_type : 'TEP'

@@ -255,7 +255,7 @@ if __name__ == '__main__':
                                      ways=diffusion_dataset.ways,
                                      time=time,
                                      dataset='TEP',
-                                     guided_fn=condition_func)
+                                     guided_fn=None)
                 print("=========================Augment done===========================")
 
                 print("=========================Classification===========================")

@@ -7,6 +7,7 @@
 import dill
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import matplotlib
 import torch
 import yaml
@@ -15,6 +16,7 @@ from itertools import product
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.manifold import TSNE, MDS
+import umap
 
 from process_data.dataset import FaultDataset, TEPDataset
 from process_data.analysis import attribute_standard, transform_attribute_to_label, information_standard
@@ -240,12 +242,12 @@ if __name__ == '__main__':
     att_list = torch.FloatTensor(att_list)
     # print(len(att_list))
 
-    dataset = FaultDataset(config, method=config.method)
-    dataset_aug = FaultDataset(config, method=config.method, augment=True, with_train=False)
-    dataset_aug_with_train = FaultDataset(config, method=config.method, augment=True, with_train=True)
-    # print(dataset_aug.test_data.shape)
-
-    colors = ['blue', 'red', 'green', 'purple']
+    # dataset = FaultDataset(config, method=config.method)
+    # dataset_aug = FaultDataset(config, method=config.method, augment=True, with_train=False)
+    # dataset_aug_with_train = FaultDataset(config, method=config.method, augment=True, with_train=True)
+    # # print(dataset_aug.test_data.shape)
+    #
+    # colors = ['blue', 'red', 'green', 'purple']
 
     # source = []
     # source2 = []
@@ -257,7 +259,7 @@ if __name__ == '__main__':
     i = 0
     fig, axes = plt.subplots(5, 6)
 
-    mds = MDS(n_components=2)
+    # mds = MDS(n_components=2)
 
     # # tsne
     # source_data = dataset.train_data.numpy()
@@ -283,22 +285,19 @@ if __name__ == '__main__':
     # plot_points(data, axes)
     # plt.show()
 
-    with open("..\\processed_data\\test\\augment\\9_TEP_60.pkl", 'rb') as f:
+    with open("../processed_data/test/without_guided/9_TEP_60.pkl", 'rb') as f:
         datas = dill.load(f)
-    with open("..\\processed_data\\tep_train_lda_standard.pkl", 'rb') as f:
+    with open("..\\processed_data\\tep_train_lda_zscore_standard.pkl", 'rb') as f:
         source_datas = dill.load(f)
     batch_size = datas.shape[0]
     datas = np.reshape(datas, (batch_size, 17))
     data, label = np.split(datas, [16, ], axis=-1)
+    label = np.reshape(label, (300, ))
     print(data.shape)
     print(label)
-
-    # source_data, source_label = np.split(source_datas, [52, ], axis=-1)
-    # source_label = np.squeeze(source_label, axis=-1)
-    # lda = LinearDiscriminantAnalysis(n_components=16)
-    # source_data = lda.fit_transform(source_data, source_label)
-    # source_label = source_label[..., None]
-    # source_datas = np.concatenate([source_data, source_label], axis=-1)
+    # augment_pd = pd.DataFrame(data=data, index=label, columns=None)
+    # augment_pd.to_csv("augment_data.csv")
+    # print(augment_pd)
 
     # label = np.unique(label)
     label = unranked_unique(label)
@@ -306,27 +305,39 @@ if __name__ == '__main__':
     expect_datas = []
     expect_labels = []
     index = np.arange(0, 480)
-    for y in label:
+    count = 0
+    for idx, y in enumerate(label):
+        count += 1
+        if count != 5:
+            continue
         data_list = []
         for item in source_datas:
             if item[-1] == y:
                 item = item[:-1]
                 item = item[None, ]
                 data_list.append(item)
+        augment_data = data[60*idx:60*(idx+1)]
+        expect_datas.append(augment_data)
         expect_data = np.concatenate(data_list, axis=0)
-        indices = np.random.choice(index, 60)
-        labels = np.array([y]*60)
+        indices = np.random.choice(index, 300)
+        labels = np.array([y]*300)
         expect_labels.append(labels)
+        # expect_datas.append(expect_data)
         expect_datas.append(expect_data[indices])
         # expect_datas.append(expect_data)
+        # break
     expect_datas = np.concatenate(expect_datas, axis=0)
     expect_labels = np.concatenate(expect_labels, axis=0)
     print(expect_datas.shape)
-    print(expect_labels)
+    print(expect_labels.shape)
+    # expect_datas_pd = pd.DataFrame(data=expect_datas, index=expect_labels, columns=None)
+    # expect_datas_pd.to_csv("source.csv")
 
     for i in range(1, 31):
-        tsne = TSNE(n_components=2, perplexity=i)
-        data_viz = tsne.fit_transform(expect_datas)
+        # tsne = TSNE(n_components=2, perplexity=i)
+        # data_viz = tsne.fit_transform(expect_datas)
+        u_map = umap.UMAP(n_neighbors=i+1)
+        data_viz = u_map.fit_transform(expect_datas)
         # x0 = data_viz[:480, 0]
         # y0 = data_viz[:480, 1]
         # x1 = data_viz[480:960, 0]
@@ -349,14 +360,14 @@ if __name__ == '__main__':
         # y4 = data_viz[36:45, 1]
         x0 = data_viz[:60, 0]
         y0 = data_viz[:60, 1]
-        x1 = data_viz[60:120, 0]
-        y1 = data_viz[60:120, 1]
-        x2 = data_viz[120:180, 0]
-        y2 = data_viz[120:180, 1]
-        x3 = data_viz[180:240, 0]
-        y3 = data_viz[180:240, 1]
-        x4 = data_viz[240:300, 0]
-        y4 = data_viz[240:300, 1]
+        x1 = data_viz[60:360, 0]
+        y1 = data_viz[60:360, 1]
+        # x2 = data_viz[120:180, 0]
+        # y2 = data_viz[120:180, 1]
+        # x3 = data_viz[180:240, 0]
+        # y3 = data_viz[180:240, 1]
+        # x4 = data_viz[240:300, 0]
+        # y4 = data_viz[240:300, 1]
         # x0 = data_viz[:300, 0]
         # y0 = data_viz[:300, 1]
         # x1 = data_viz[300:600, 0]
@@ -372,8 +383,8 @@ if __name__ == '__main__':
         col_index = index % 6
         axes[row_index][col_index].scatter(x0, y0, c='black')
         axes[row_index][col_index].scatter(x1, y1, c='green')
-        axes[row_index][col_index].scatter(x2, y2, c='blue')
-        axes[row_index][col_index].scatter(x3, y3, c='red')
-        axes[row_index][col_index].scatter(x4, y4, c='purple')
+        # axes[row_index][col_index].scatter(x2, y2, c='blue')
+        # axes[row_index][col_index].scatter(x3, y3, c='red')
+        # axes[row_index][col_index].scatter(x4, y4, c='purple')
     plt.show()
 

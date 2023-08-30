@@ -149,8 +149,8 @@ class AdaEB(nn.Module):
         scale = torch.sigmoid(self.scale(emb))
         shift = self.shift(emb)
 
-        # out = scale * x + shift
-        out = scale * x
+        out = scale * x + shift
+        # out = scale * x
         # out = self.group_norm(x) * ys + yb
         return out
 

@@ -285,7 +285,7 @@ if __name__ == '__main__':
     # plot_points(data, axes)
     # plt.show()
 
-    with open("../processed_data/test/without_guided/9_TEP_60.pkl", 'rb') as f:
+    with open("../processed_data/test/augment/3_TEP_60.pkl", 'rb') as f:
         datas = dill.load(f)
     with open("..\\processed_data\\tep_train_lda_zscore_standard.pkl", 'rb') as f:
         source_datas = dill.load(f)
@@ -304,11 +304,14 @@ if __name__ == '__main__':
     print(label)
     expect_datas = []
     expect_labels = []
+    source_shots_data = None
+    # [252, 328, 8]
+    shots_index = np.array([328, 8, 252], dtype=np.int32)
     index = np.arange(0, 480)
     count = 0
     for idx, y in enumerate(label):
         count += 1
-        if count != 5:
+        if count != 1:
             continue
         data_list = []
         for item in source_datas:
@@ -319,11 +322,16 @@ if __name__ == '__main__':
         augment_data = data[60*idx:60*(idx+1)]
         expect_datas.append(augment_data)
         expect_data = np.concatenate(data_list, axis=0)
-        indices = np.random.choice(index, 300)
-        labels = np.array([y]*300)
+        source_shots_data = expect_data[shots_index]
+        print(source_shots_data.shape)
+        # expect_data_without_source = np.delete(expect_data, shots_index, axis=0)
+        # print(expect_data_without_source.shape)
+        # indices = np.random.choice(index, 300)
+        labels = np.array([y]*480)
         expect_labels.append(labels)
-        # expect_datas.append(expect_data)
-        expect_datas.append(expect_data[indices])
+        expect_datas.append(expect_data)
+        # expect_datas.append(expect_data[indices])
+        expect_datas.append(source_shots_data)
         # expect_datas.append(expect_data)
         # break
     expect_datas = np.concatenate(expect_datas, axis=0)
@@ -338,6 +346,8 @@ if __name__ == '__main__':
         # data_viz = tsne.fit_transform(expect_datas)
         u_map = umap.UMAP(n_neighbors=i+1)
         data_viz = u_map.fit_transform(expect_datas)
+        # tsne = TSNE(n_components=2, perplexity=i+1)
+        # data_viz = tsne.fit_transform(data)
         # x0 = data_viz[:480, 0]
         # y0 = data_viz[:480, 1]
         # x1 = data_viz[480:960, 0]
@@ -360,8 +370,10 @@ if __name__ == '__main__':
         # y4 = data_viz[36:45, 1]
         x0 = data_viz[:60, 0]
         y0 = data_viz[:60, 1]
-        x1 = data_viz[60:360, 0]
-        y1 = data_viz[60:360, 1]
+        x1 = data_viz[60:540, 0]
+        y1 = data_viz[60:540, 1]
+        xz = data_viz[540:, 0]
+        yz = data_viz[540:, 1]
         # x2 = data_viz[120:180, 0]
         # y2 = data_viz[120:180, 1]
         # x3 = data_viz[180:240, 0]
@@ -381,8 +393,12 @@ if __name__ == '__main__':
         index = i - 1
         row_index = index // 6
         col_index = index % 6
-        axes[row_index][col_index].scatter(x0, y0, c='black')
         axes[row_index][col_index].scatter(x1, y1, c='green')
+        axes[row_index][col_index].scatter(x0, y0, c='black')
+        axes[row_index][col_index].scatter(xz, yz, c='red')
+        axes[row_index][col_index].annotate("328", (xz[0], yz[0]))
+        axes[row_index][col_index].annotate("8", (xz[1], yz[1]))
+        axes[row_index][col_index].annotate("252", (xz[2], yz[2]))
         # axes[row_index][col_index].scatter(x2, y2, c='blue')
         # axes[row_index][col_index].scatter(x3, y3, c='red')
         # axes[row_index][col_index].scatter(x4, y4, c='purple')

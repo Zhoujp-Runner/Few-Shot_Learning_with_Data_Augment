@@ -6,6 +6,7 @@
 2. 划分数据集(先不划分数据集，先将扩散模型搭完后再划分数据)
 3. 建立映射关系：__getitem__, __len__
 """
+import math
 import os
 import numpy as np
 import torch
@@ -304,12 +305,15 @@ class TEPDataset(Dataset):
             self.ways_num = config.ways_num
         else:
             self.ways_num = ways_num
+        self.expand_num = 9
 
         self.total_classes = np.arange(1, 22)  # TEP数据集总共有21种故障类型
         self.train_data = []
         self.test_data = []
+        self.classification_data = []
         self.ways = None
-        self.get_data_randomly()
+        # self.get_data_randomly()
+        self.get_data_randomly_for_specified_way()
 
         if self.mode == 'train':
             self.len = len(self.train_data)
@@ -353,6 +357,116 @@ class TEPDataset(Dataset):
         self.train_data = torch.FloatTensor(self.train_data)
         self.test_data = torch.FloatTensor(self.test_data)
 
+    def get_data_randomly_for_specified_way(self):
+        # 随机抽取类别
+        self.ways = np.random.choice(self.total_classes, size=self.ways_num, replace=False)
+        # 如果随机抽取的类别中没有6，就将第一个类别改为6
+        if 1 not in self.ways:
+            self.ways[0] = 1
+
+        for way in self.ways:
+            # way = 1
+            index = np.arange(0, 480)  # 每一类中有480个样本
+            data_of_way = []
+            for item in self.source_data:
+                if item[-1] == way:
+                    data_of_way.append(item)
+            # TODO 这里注意一下为什么concatenate和stack的效果会不一样
+            data_of_way = np.stack(data_of_way, axis=0)
+            # 如果类别是1，那么就取147, 328, 8, 144, 252[147, 8, 252][]
+            # 类别6：129 148 321 340  37 141  79 [37, 148, 321]
+            if way == 1:
+                index_of_shots = np.array([328, 8, 252], dtype=np.int64)
+            else:  # 否则就随机选取数据
+                index_of_shots = np.random.choice(index, size=self.shots_num, replace=False)
+            shots_of_way = data_of_way[index_of_shots]
+            # 计算余弦相似度
+            cosine, cosine_sum, weight = self.calculate_cosine_relationship(shots_of_way)
+            # 根据权重扩张数据
+            expanded_data_of_way = self.expand_data(shots_of_way, weight)
+            if way == 1:
+                print(cosine)
+                print(cosine_sum)
+                print(weight)
+                print(shots_of_way)
+                print(expanded_data_of_way)
+            data_copy = np.copy(data_of_way)
+            data_except_shots = np.delete(data_copy, index_of_shots, axis=0)
+        # return shots_of_way, data_except_shots, index_of_shots
+        #     self.train_data.append(shots_of_way)
+            self.train_data.append(expanded_data_of_way)
+            self.test_data.append(data_except_shots)
+            # self.classification_data.append(shots_of_way)
+
+        self.train_data = np.concatenate(self.train_data, axis=0)  # 最终的数据集 shape:[ways_num * shots_num, 16 + 1]
+        self.test_data = np.concatenate(self.test_data, axis=0)
+        # self.classification_data = np.concatenate(self.classification_data, axis=0)
+        # print(self.train_data.shape)
+        # print(self.test_data.shape)
+
+        if self.augment:
+            save_augment_root = self.config.augment_data_root
+            save_augment_name = f"{self.config.shots_num}_{self.config.dataset_type}_{self.config.augment_num}.pkl"
+            save_augment_path = os.path.join(save_augment_root, save_augment_name)
+            with open(save_augment_path, 'rb') as f:
+                self.train_data = dill.load(f)
+
+        self.train_data = torch.FloatTensor(self.train_data)
+        self.test_data = torch.FloatTensor(self.test_data)
+        # self.classification_data = torch.FloatTensor(self.classification_data)
+
+    @staticmethod
+    def calculate_cosine_relationship(vectors):
+        """
+        计算每一个数据点与其他数据点之间的余弦相似度，其中与自己的相似度设置为0（实际上为1，但为了方便后面的计算，取为0）
+        :param vectors: [shots_num, dim]
+        :return: [shots_num, shots_num], [shots_num]  前者是某一个样本与其他样本的余弦相似度，后者是将某一个样本与所有样本余弦相似度求和
+        """
+        shots_num = vectors.shape[0]
+        res = np.zeros((shots_num, shots_num))
+        for idx, vector in enumerate(vectors):
+            for another_idx, another in enumerate(vectors):
+                if idx != another_idx:
+                    # 向量的点乘
+                    project = np.dot(vector, another)
+                    # 两个向量模长的乘积
+                    norm_prod = np.linalg.norm(vector) * np.linalg.norm(another)
+                    # 余弦
+                    res[idx, another_idx] = project / norm_prod
+        res_sum = np.sum(res, axis=1)
+        res_e_sum = np.exp(2 * res_sum)
+        total_sum = np.sum(res_e_sum)
+        res_weight = res_e_sum / total_sum
+        return res, res_sum, res_weight
+
+    def expand_data(self, vectors, weights):
+        """
+        根据prob中每个向量对应的权重大小，分别扩张向量的数量（只是简单的复制）
+        :param vectors: [shots_num, dim]
+        :param weights: [shots_num]
+        :return: [shots_num + expand_num, dim]
+        """
+        res = []
+        expand_num_sum = 0
+        for idx, weight in enumerate(weights):
+            if idx == self.shots_num - 1:
+                expand_num_for_this_vector = self.expand_num - expand_num_sum
+            else:
+                expand_num_for_this_vector = round(self.expand_num * weight)
+            expand_num_sum += expand_num_for_this_vector
+            vector = vectors[idx]
+            if expand_num_for_this_vector <= 0:
+                continue
+            res.append(vector)
+            for _ in range(expand_num_for_this_vector - 1):
+                noise = np.random.randn(*vector.shape) / 100
+                res.append(vector.copy() + noise)
+                # res.append(vector.copy())
+        res = np.stack(res, axis=0)
+        if res.shape[0] != self.expand_num:
+            raise ValueError(f"expand num is wrong! {self.expand_num} is needed, but result is {res.shape}")
+        return res
+
     def __getitem__(self, item):
         """返回数据和标签值"""
         if self.mode == 'train':
@@ -366,7 +480,7 @@ class TEPDataset(Dataset):
         return sample, label
 
     def __len__(self):
-        return self.len
+         return self.len
 
 
 class GuidedDataset(Dataset):
@@ -445,8 +559,20 @@ if __name__ == '__main__':
     # print(test)
     # print(dele)
 
-    # # TEP数据集
-    # tep_dataset = TEPDataset(config, mode='test')
+    # TEP数据集
+    tep_dataset = TEPDataset(config, mode='test')
+    teet = [[1, 1],
+            [2, 1],
+            [0, 2]]
+    teet = np.array(teet)
+    _, __, wei = tep_dataset.calculate_cosine_relationship(teet)
+    # print(_, __, wei)
+    # print(tep_dataset.expand_data(teet, wei))
+    print(tep_dataset.train_data.shape)
+    print(tep_dataset.ways)
+    # train_data, test_data, index = tep_dataset.get_data_randomly_for_specified_way()
+    # print(index)
+    # data = np.concatenate([train_data, test_data], axis=0)
     # way = torch.FloatTensor(tep_dataset.ways)
     # for w in way:
     #     w = w.unsqueeze(0)
@@ -465,9 +591,32 @@ if __name__ == '__main__':
     # # x = torch.IntTensor([1, 2, 3, 2, 1])
     # # y = torch.FloatTensor([1, 2, 5, 2, 1])
     # # print(torch.sum(x == y))
+    # import umap
+    # from sklearn.manifold import TSNE, MDS
+    # import matplotlib.pyplot as plt
+    # fig, axes = plt.subplots(5, 6)
+    # for i in range(1, 31):
+    #     u_map = umap.UMAP(n_neighbors=i+1, unique=True)
+    #     data_viz = u_map.fit_transform(data)
+    #     # tsne = TSNE(n_components=2, perplexity=i+1)
+    #     # data_viz = tsne.fit_transform(data)
+    #     x0 = data_viz[:3, 0]
+    #     y0 = data_viz[:3, 1]
+    #     x1 = data_viz[3:, 0]
+    #     y1 = data_viz[3:, 1]
+    #     index = i - 1
+    #     row = index // 6
+    #     col = index % 6
+    #     axes[row][col].scatter(x1, y1, c='green')
+    #     axes[row][col].scatter(x0, y0, c='red')
+    #     axes[row][col].annotate("328", (x0[0], y0[0]))
+    #     axes[row][col].annotate("8", (x0[1], y0[1]))
+    #     axes[row][col].annotate("252", (x0[2], y0[2]))
+    # plt.show()
 
     # # 引导分类器数据集
-    # guided_dataset = GuidedDataset(config, 'Hydraulic')
+    # guided_dataset = GuidedDataset(config, 'TEP')
+    # print(guided_dataset.train_data.shape)
     # print(guided_dataset.len)
     # print(guided_dataset.__getitem__(999))
     # print(guided_dataset.train_data.shape)

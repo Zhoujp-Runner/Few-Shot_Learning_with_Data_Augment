@@ -44,7 +44,7 @@ classification_root : "experiments\\logs\\test\\classification"
 save_data_root : "..\\processed_data"
 augment_num : 20
 dataset_augment_num : 100
-shots_num : 3
+shots_num : 9
 ways_num : 5
 
 # attribute information

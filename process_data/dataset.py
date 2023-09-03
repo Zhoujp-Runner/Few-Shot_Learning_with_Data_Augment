@@ -305,15 +305,17 @@ class TEPDataset(Dataset):
             self.ways_num = config.ways_num
         else:
             self.ways_num = ways_num
-        self.expand_num = 9
+        self.expand_num = self.shots_num * 2
 
         self.total_classes = np.arange(1, 22)  # TEP数据集总共有21种故障类型
         self.train_data = []
         self.test_data = []
         self.classification_data = []
         self.ways = None
-        # self.get_data_randomly()
-        self.get_data_randomly_for_specified_way()
+        if self.shots_num == 1:
+            self.get_data_randomly()
+        else:
+            self.get_data_randomly_for_specified_way()
 
         if self.mode == 'train':
             self.len = len(self.train_data)
@@ -360,9 +362,9 @@ class TEPDataset(Dataset):
     def get_data_randomly_for_specified_way(self):
         # 随机抽取类别
         self.ways = np.random.choice(self.total_classes, size=self.ways_num, replace=False)
-        # 如果随机抽取的类别中没有6，就将第一个类别改为6
-        if 1 not in self.ways:
-            self.ways[0] = 1
+        # # 如果随机抽取的类别中没有6，就将第一个类别改为6
+        # if 1 not in self.ways:
+        #     self.ways[0] = 1
 
         for way in self.ways:
             # way = 1
@@ -373,23 +375,23 @@ class TEPDataset(Dataset):
                     data_of_way.append(item)
             # TODO 这里注意一下为什么concatenate和stack的效果会不一样
             data_of_way = np.stack(data_of_way, axis=0)
-            # 如果类别是1，那么就取147, 328, 8, 144, 252[147, 8, 252][]
-            # 类别6：129 148 321 340  37 141  79 [37, 148, 321]
-            if way == 1:
-                index_of_shots = np.array([328, 8, 252], dtype=np.int64)
-            else:  # 否则就随机选取数据
-                index_of_shots = np.random.choice(index, size=self.shots_num, replace=False)
+            # # 如果类别是1，那么就取147, 328, 8, 144, 252[147, 8, 252][]
+            # # 类别6：129 148 321 340  37 141  79 [37, 148, 321]
+            # if way == 1:
+            #     index_of_shots = np.array([328, 8, 252], dtype=np.int64)
+            # else:  # 否则就随机选取数据
+            index_of_shots = np.random.choice(index, size=self.shots_num, replace=False)
             shots_of_way = data_of_way[index_of_shots]
             # 计算余弦相似度
             cosine, cosine_sum, weight = self.calculate_cosine_relationship(shots_of_way)
             # 根据权重扩张数据
             expanded_data_of_way = self.expand_data(shots_of_way, weight)
-            if way == 1:
-                print(cosine)
-                print(cosine_sum)
-                print(weight)
-                print(shots_of_way)
-                print(expanded_data_of_way)
+            # if way == 1:
+            #     print(cosine)
+            #     print(cosine_sum)
+            #     print(weight)
+            #     print(shots_of_way)
+            #     print(expanded_data_of_way)
             data_copy = np.copy(data_of_way)
             data_except_shots = np.delete(data_copy, index_of_shots, axis=0)
         # return shots_of_way, data_except_shots, index_of_shots
@@ -455,15 +457,13 @@ class TEPDataset(Dataset):
                 expand_num_for_this_vector = round(self.expand_num * weight)
             expand_num_sum += expand_num_for_this_vector
             vector = vectors[idx]
-            if expand_num_for_this_vector <= 0:
-                continue
             res.append(vector)
-            for _ in range(expand_num_for_this_vector - 1):
+            for _ in range(expand_num_for_this_vector):
                 noise = np.random.randn(*vector.shape) / 100
                 res.append(vector.copy() + noise)
                 # res.append(vector.copy())
         res = np.stack(res, axis=0)
-        if res.shape[0] != self.expand_num:
+        if res.shape[0] != self.expand_num + self.shots_num:
             raise ValueError(f"expand num is wrong! {self.expand_num} is needed, but result is {res.shape}")
         return res
 

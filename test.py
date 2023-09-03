@@ -120,7 +120,7 @@ if __name__ == '__main__':
     test_config_path = "configs\\test_config.yaml"
     all_config = get_all_config(test_config_path)
     configs = get_config_list(all_config)
-    test_times = 10
+    test_times = 50
     epochs = np.array(range(10 - 1, 2000, 10))
     index = np.argmin(np.abs(epochs - 1534))
     test_logger = set_log()

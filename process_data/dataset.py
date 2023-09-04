@@ -305,7 +305,7 @@ class TEPDataset(Dataset):
             self.ways_num = config.ways_num
         else:
             self.ways_num = ways_num
-        self.expand_num = self.shots_num * 2
+        self.expand_num = 9
 
         self.total_classes = np.arange(1, 22)  # TEP数据集总共有21种故障类型
         self.train_data = []
@@ -450,21 +450,29 @@ class TEPDataset(Dataset):
         """
         res = []
         expand_num_sum = 0
-        for idx, weight in enumerate(weights):
+        indices = np.argsort(-weights)
+        for idx, index in enumerate(indices):
             if idx == self.shots_num - 1:
                 expand_num_for_this_vector = self.expand_num - expand_num_sum
             else:
-                expand_num_for_this_vector = round(self.expand_num * weight)
+                expand_num_for_this_vector = round(self.expand_num * weights[index])
             expand_num_sum += expand_num_for_this_vector
-            vector = vectors[idx]
+            vector = vectors[index]
             res.append(vector)
+
+            if expand_num_sum > self.expand_num and expand_num_for_this_vector > 0:
+                while expand_num_sum > self.expand_num:
+                    expand_num_sum -= 1
+                    expand_num_for_this_vector -= 1
             for _ in range(expand_num_for_this_vector):
                 noise = np.random.randn(*vector.shape) / 100
                 res.append(vector.copy() + noise)
                 # res.append(vector.copy())
         res = np.stack(res, axis=0)
         if res.shape[0] != self.expand_num + self.shots_num:
-            raise ValueError(f"expand num is wrong! {self.expand_num} is needed, but result is {res.shape}")
+            raise ValueError(
+                f"expand num is wrong! {self.expand_num + self.shots_num} is needed, but result is {res.shape}, the weight is {weights}"
+            )
         return res
 
     def __getitem__(self, item):
@@ -570,6 +578,9 @@ if __name__ == '__main__':
     # print(tep_dataset.expand_data(teet, wei))
     print(tep_dataset.train_data.shape)
     print(tep_dataset.ways)
+    # [0.18318991 0.11052804 0.04906468 0.18024567 0.13658643 0.14876182
+    #  0.19162344]
+    print(round(2.562))
     # train_data, test_data, index = tep_dataset.get_data_randomly_for_specified_way()
     # print(index)
     # data = np.concatenate([train_data, test_data], axis=0)

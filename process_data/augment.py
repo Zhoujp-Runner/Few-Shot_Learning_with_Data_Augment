@@ -14,7 +14,8 @@ from easydict import EasyDict
 from itertools import product
 
 from models.diffusion import DiffusionModel
-from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel
+from models.gan import GanModel
+from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel, Generator
 from process_data.analysis import information_standard, transform_attribute_to_label
 
 
@@ -52,7 +53,17 @@ class DataAugment(object):
         self.filehandle.setFormatter(self.formatter)
         self.logger.addHandler(self.filehandle)
 
-    def data_augment(self, dim_in, dim_condition, dim_hidden, model_type, ways, time=0, dataset='Hydraulic', guided_fn=None):
+    def data_augment(self,
+                     dim_in,
+                     dim_condition,
+                     model_type,
+                     ways,
+                     dim_hidden=None,
+                     time=0,
+                     dataset='Hydraulic',
+                     guided_fn=None,
+                     latent_dim=None,
+                     n_class=None):
         """
         使用扩散模型生成新数据，用于数据增强
         """
@@ -119,11 +130,31 @@ class DataAugment(object):
             model_dict = torch.load(load_path)
             model_state = model_dict['model_state_dict']
             model.load_state_dict(model_state)
+
+        elif model_type == 'Generator':
+            load_name = f'epoch{self.epoch}_checkpoint.pkl'
+            load_root = self.config.gan_model_root
+            sub_dir_name = f"{self.config.shots_num}_{self.config.method}"
+            load_path = os.path.join(load_root, sub_dir_name, load_name)
+
+            # 加载预测模型
+            model = Generator(latent_dim=latent_dim,
+                              out_dim=dim_in,
+                              n_class=n_class,
+                              emb_dim=dim_condition)
+
+            model_dict = torch.load(load_path)
+            model_state = model_dict['generator_state_dict']
+            model.load_state_dict(model_state)
+
         else:
             raise ValueError("There is no such model_type, please try another type!")
 
         # 加载扩散模型
-        diffusion_model = DiffusionModel(self.config)
+        if model_type != "Generator":
+            inference_model = DiffusionModel(self.config)
+        else:
+            inference_model = GanModel(self.config)
 
         # 每一个属性需要扩增的数据的大小
         if self.config.method == 'Split Standard Dim3 PCA' or self.config.method == 'Split LDA Standard Dim3':
@@ -158,10 +189,10 @@ class DataAugment(object):
             attribute = attribute.unsqueeze(0)  # [1, attribute_dim]
             # TODO 这里对于每一个属性使用同一个diffusion model进行生成样本，是否有问题？
             if dataset == 'Hydraulic':
-                data = diffusion_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn, label=label[idx])
+                data = inference_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn, label=label[idx])
                 augment_attribute.append(attribute.expand(augment_size[0], 4).numpy())
             elif dataset == 'TEP':
-                data = diffusion_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn)
+                data = inference_model.sample_loop(model, augment_size, attribute=attribute, guided_fn=guided_fn)
                 augment_attribute.append(attribute.expand(augment_size[0], 1).numpy())
             augment_data.append(data.cpu().numpy())
         augment_data = np.concatenate(augment_data, axis=0)  # [100*class_num, dim]

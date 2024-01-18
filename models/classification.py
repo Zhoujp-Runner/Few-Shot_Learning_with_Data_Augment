@@ -272,8 +272,8 @@ class TrainClassification(object):
                     attribute = attribute.to(device)
 
                 out = model(data)
-                print(out)
-                print(attribute)
+                # print(out)
+                # print(attribute)
                 loss = loss_func(out, attribute)
                 optimizer.zero_grad()
                 loss.backward()
@@ -340,7 +340,7 @@ class TrainClassification(object):
             # print(indices)
             # print(labels)
             # print(torch.sum(indices == labels))
-            print(len(data_set.test_data))
+            # print(len(data_set.test_data))
             accuracy = torch.sum(indices == labels) / len(data_set.test_data)
         return accuracy.item()
 

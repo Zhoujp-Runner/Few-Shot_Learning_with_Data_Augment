@@ -15,7 +15,8 @@ import logging
 
 from process_data.dataset import FaultDataset, TEPDataset
 from models.diffusion import DiffusionModel
-from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel, GuidedClassifier
+from models.gan import GanModel
+from models.model import MLPModel, ConcatModel, AttentionModel, AdaModel, GuidedClassifier, Generator, Discriminator
 from process_data.augment import DataAugment
 from models.classification import TrainClassification
 
@@ -52,6 +53,7 @@ def get_config_list(all_config):
     config_updated.update(all_config["augment"])
     config_updated["diffusion_model_root"] = all_config["diffusion_model"]["root"]
     config_updated["classification_model_root"] = all_config["classification_model"]["root"]
+    config_updated["gan_model_root"] = all_config["gan_model"]["root"]
     config_updated.update(all_config["log"])
     config_updated.update(all_config["classifier"])
     config_updated["ways_num"] = all_config["ways_num"]
@@ -88,7 +90,7 @@ def set_log():
         logger.removeHandler(handle)
 
     # self.filehandle = logging.FileHandler(self.config.save_log_path)
-    file_path = "experiments\\logs\\test\\test.log"
+    file_path = "experiments/logs/test/test.log"
     filehandle = logging.FileHandler(file_path)
     filehandle.setLevel(logging.DEBUG)
 
@@ -104,9 +106,9 @@ def set_log():
 def get_classifier(config):
     """加载classifier模型"""
     # 参数要与classifier_train中的参数一致
-    classifier = GuidedClassifier(dim_in=64,
+    classifier = GuidedClassifier(dim_in=16,
                                   dim_hidden=256,
-                                  dim_out=144,
+                                  dim_out=21,
                                   diffusion_num_step=50)
 
     path = config["classifier_path"]
@@ -120,7 +122,7 @@ if __name__ == '__main__':
     test_config_path = "configs\\test_config.yaml"
     all_config = get_all_config(test_config_path)
     configs = get_config_list(all_config)
-    test_times = 50
+    test_times = 10
     epochs = np.array(range(10 - 1, 2000, 10))
     index = np.argmin(np.abs(epochs - 1534))
     test_logger = set_log()
@@ -154,126 +156,183 @@ if __name__ == '__main__':
         min_augment_time = 0
 
         for time in range(test_times):
-            if config["dataset_type"] == 'Hydraulic':
-                print("=========================Diffusion Training=========================")
-                config = EasyDict(config)
-                diffusion_model = DiffusionModel(config)
+            # if config["dataset_type"] == 'Hydraulic':
+            #     print("=========================Diffusion Training=========================")
+            #     config = EasyDict(config)
+            #     diffusion_model = DiffusionModel(config)
+            #
+            #     diffusion_dataset = FaultDataset(config,
+            #                                      method=config.method,
+            #                                      use_random_combination=True)
+            #     dim_in = diffusion_dataset.train_data.shape[-1]
+            #     dim_condition = diffusion_dataset.train_attribute.shape[-1]
+            #     dim_hidden = 128
+            #     linear_model = MLPModel(input_dim=dim_in,
+            #                             num_steps=diffusion_model.num_diffusion_steps)
+            #     concat_model = ConcatModel(dim_in=dim_in,
+            #                                dim_condition=dim_condition)
+            #     attention_model = AttentionModel(dim_in=dim_in,
+            #                                      dim_condition=dim_condition)
+            #     ada_model = AdaModel(dim_in=dim_in,
+            #                          dim_hidden=dim_hidden,
+            #                          attribute_dim=dim_condition,
+            #                          num_steps=diffusion_model.num_diffusion_steps,
+            #                          dataset='Hydraulic')
+            #
+            #     min_loss, min_epoch = diffusion_model.train(diffusion_dataset, ada_model, time)
+            #     print("=========================Training done==========================")
+            #     # diffusion_message = f"Diffusion Training : min_epoch = {min_epoch} : min_loss = {min_loss}"
+            #     # test_logger.info(diffusion_message)
+            #     # print(diffusion_message)
+            #
+            #     # epochs = np.array(range(config.checkpoint_interval-1, config.epochs, config.checkpoint_interval))
+            #     # index = np.argmin(np.abs(epochs - min_epoch))
+            #     # epoch = epochs[index]
+            #
+            #     # # min_epoch = min_epochs[idx]
+            #     print("=========================Augment===========================")
+            #     augment = DataAugment(config, min_epoch)
+            #     augment.data_augment(dim_in=dim_in,
+            #                          dim_condition=dim_condition,
+            #                          dim_hidden=dim_hidden,
+            #                          model_type=ada_model.type,
+            #                          ways=diffusion_dataset.ways,
+            #                          time=time,
+            #                          dataset='Hydraulic',
+            #                          guided_fn=condition_func)
+            #     print("=========================Augment done===========================")
+            #
+            #     print("=========================Classification===========================")
+            #     classification = TrainClassification(config,
+            #                                          ways=diffusion_dataset.ways)
+            #     result = classification.train_loop(time)
+            #     if min_augment_accuracy > result[1][1]:
+            #         min_augment_accuracy = result[1][1]
+            #         min_augment_ways = diffusion_dataset.ways
+            #         min_augment_time = time
+            #     if min_source_accuracy > result[0][1]:
+            #         min_source_accuracy = result[0][1]
+            #         min_source_ways = diffusion_dataset.ways
+            #         min_source_time = time
+            #
+            #     total_augment_accuracy += result[1][1]
+            #     total_source_accuracy += result[0][1]
+            #
+            #     # # 记录结果
+            #     # message = f"{config.shots_num}_{config.method} classification result:"
+            #     # message_no_augment = f"Without Augment: epoch{result[0][0]}---accuracy={result[0][1]}"
+            #     # message_augment = f"Without Augment: epoch{result[1][0]}---accuracy={result[1][1]}"
+            #     # test_logger.info(message)
+            #     # test_logger.info(message_no_augment)
+            #     # test_logger.info(message_augment)
+            #     print("=========================Classification done===========================")
+            # elif config["dataset_type"] == 'TEP':
+            #     print("=========================Diffusion Training=========================")
+            #     config = EasyDict(config)
+            #     diffusion_model = DiffusionModel(config)
+            #
+            #     diffusion_dataset = TEPDataset(config,
+            #                                    mode='train')
+            #     # TEP数据集每个样本的数据是52维且类别维度是1
+            #     dim_in = diffusion_dataset.train_data.shape[-1] - 1
+            #     # 要求将1维的类别信息编码成dim_condition维的向量
+            #     dim_condition = 32
+            #     dim_hidden = 64
+            #
+            #     ada_model = AdaModel(dim_in=dim_in,
+            #                          dim_hidden=dim_hidden,
+            #                          attribute_dim=dim_condition,
+            #                          num_steps=diffusion_model.num_diffusion_steps,
+            #                          dataset='TEP')
+            #
+            #     min_loss, min_epoch = diffusion_model.train(diffusion_dataset, ada_model, time)
+            #     print("=========================Training done==========================")
+            #
+            #     print("=========================Augment===========================")
+            #     augment = DataAugment(config, min_epoch)
+            #     augment.data_augment(dim_in=dim_in,
+            #                          dim_condition=dim_condition,
+            #                          dim_hidden=dim_hidden,
+            #                          model_type=ada_model.type,
+            #                          ways=diffusion_dataset.ways,
+            #                          time=time,
+            #                          dataset='TEP',
+            #                          guided_fn=condition_func)
+            #     print("=========================Augment done===========================")
+            #
+            #     print("=========================Classification===========================")
+            #     classification = TrainClassification(config,
+            #                                          ways=diffusion_dataset.ways)
+            #     result = classification.train_loop(time, data_set=diffusion_dataset)
+            #     if min_augment_accuracy > result[1][1]:
+            #         min_augment_accuracy = result[1][1]
+            #         min_augment_ways = diffusion_dataset.ways
+            #         min_augment_time = time
+            #     if min_source_accuracy > result[0][1]:
+            #         min_source_accuracy = result[0][1]
+            #         min_source_ways = diffusion_dataset.ways
+            #         min_source_time = time
+            #
+            #     total_augment_accuracy += result[1][1]
+            #     total_source_accuracy += result[0][1]
+            #     print("=========================Classification done===========================")
+            print("===============================Gan Training============================")
+            config = EasyDict(config)
+            gan_model = GanModel(config)
 
-                diffusion_dataset = FaultDataset(config,
-                                                 method=config.method,
-                                                 use_random_combination=True)
-                dim_in = diffusion_dataset.train_data.shape[-1]
-                dim_condition = diffusion_dataset.train_attribute.shape[-1]
-                dim_hidden = 128
-                linear_model = MLPModel(input_dim=dim_in,
-                                        num_steps=diffusion_model.num_diffusion_steps)
-                concat_model = ConcatModel(dim_in=dim_in,
-                                           dim_condition=dim_condition)
-                attention_model = AttentionModel(dim_in=dim_in,
-                                                 dim_condition=dim_condition)
-                ada_model = AdaModel(dim_in=dim_in,
-                                     dim_hidden=dim_hidden,
-                                     attribute_dim=dim_condition,
-                                     num_steps=diffusion_model.num_diffusion_steps,
-                                     dataset='Hydraulic')
+            gan_dataset = TEPDataset(config,
+                                     mode='train')
+            # TEP数据集每个样本的数据是52维且类别维度是1
+            dim_in = gan_dataset.train_data.shape[-1] - 1
+            # 要求将1维的类别信息编码成dim_condition维的向量
+            dim_condition = 32
+            dim_hidden = 64
+            # TEP数据集的类别数
+            n_class = 22
+            # 隐变量的维度
+            latent_dim = 8
 
-                min_loss, min_epoch = diffusion_model.train(diffusion_dataset, ada_model, time)
-                print("=========================Training done==========================")
-                # diffusion_message = f"Diffusion Training : min_epoch = {min_epoch} : min_loss = {min_loss}"
-                # test_logger.info(diffusion_message)
-                # print(diffusion_message)
+            generator = Generator(latent_dim=latent_dim,
+                                  out_dim=dim_in,
+                                  n_class=n_class,
+                                  emb_dim=dim_condition)
+            discriminator = Discriminator(feature_dim=dim_in,
+                                          n_class=n_class,
+                                          emb_dim=dim_condition)
 
-                # epochs = np.array(range(config.checkpoint_interval-1, config.epochs, config.checkpoint_interval))
-                # index = np.argmin(np.abs(epochs - min_epoch))
-                # epoch = epochs[index]
+            min_epoch, min_loss = gan_model.train(gan_dataset, generator, discriminator, time)
+            print("=========================Training done==========================")
 
-                # # min_epoch = min_epochs[idx]
-                print("=========================Augment===========================")
-                augment = DataAugment(config, min_epoch)
-                augment.data_augment(dim_in=dim_in,
-                                     dim_condition=dim_condition,
-                                     dim_hidden=dim_hidden,
-                                     model_type=ada_model.type,
-                                     ways=diffusion_dataset.ways,
-                                     time=time,
-                                     dataset='Hydraulic',
-                                     guided_fn=condition_func)
-                print("=========================Augment done===========================")
+            print("=========================Augment===========================")
+            augment = DataAugment(config, min_epoch)
+            augment.data_augment(dim_in=dim_in,
+                                 dim_condition=dim_condition,
+                                 dim_hidden=dim_hidden,
+                                 model_type=generator.type,
+                                 ways=gan_dataset.ways,
+                                 time=time,
+                                 dataset='TEP',
+                                 latent_dim=latent_dim,
+                                 n_class=n_class,
+                                 guided_fn=None)
+            print("=========================Augment done===========================")
 
-                print("=========================Classification===========================")
-                classification = TrainClassification(config,
-                                                     ways=diffusion_dataset.ways)
-                result = classification.train_loop(time)
-                if min_augment_accuracy > result[1][1]:
-                    min_augment_accuracy = result[1][1]
-                    min_augment_ways = diffusion_dataset.ways
-                    min_augment_time = time
-                if min_source_accuracy > result[0][1]:
-                    min_source_accuracy = result[0][1]
-                    min_source_ways = diffusion_dataset.ways
-                    min_source_time = time
+            print("=========================Classification===========================")
+            classification = TrainClassification(config,
+                                                 ways=gan_dataset.ways)
+            result = classification.train_loop(time, data_set=gan_dataset)
+            if min_augment_accuracy > result[1][1]:
+                min_augment_accuracy = result[1][1]
+                min_augment_ways = gan_dataset.ways
+                min_augment_time = time
+            if min_source_accuracy > result[0][1]:
+                min_source_accuracy = result[0][1]
+                min_source_ways = gan_dataset.ways
+                min_source_time = time
 
-                total_augment_accuracy += result[1][1]
-                total_source_accuracy += result[0][1]
-
-                # # 记录结果
-                # message = f"{config.shots_num}_{config.method} classification result:"
-                # message_no_augment = f"Without Augment: epoch{result[0][0]}---accuracy={result[0][1]}"
-                # message_augment = f"Without Augment: epoch{result[1][0]}---accuracy={result[1][1]}"
-                # test_logger.info(message)
-                # test_logger.info(message_no_augment)
-                # test_logger.info(message_augment)
-                print("=========================Classification done===========================")
-            elif config["dataset_type"] == 'TEP':
-                print("=========================Diffusion Training=========================")
-                config = EasyDict(config)
-                diffusion_model = DiffusionModel(config)
-
-                diffusion_dataset = TEPDataset(config,
-                                               mode='train')
-                # TEP数据集每个样本的数据是52维且类别维度是1
-                dim_in = diffusion_dataset.train_data.shape[-1] - 1
-                # 要求将1维的类别信息编码成dim_condition维的向量
-                dim_condition = 32
-                dim_hidden = 64
-
-                ada_model = AdaModel(dim_in=dim_in,
-                                     dim_hidden=dim_hidden,
-                                     attribute_dim=dim_condition,
-                                     num_steps=diffusion_model.num_diffusion_steps,
-                                     dataset='TEP')
-
-                min_loss, min_epoch = diffusion_model.train(diffusion_dataset, ada_model, time)
-                print("=========================Training done==========================")
-
-                print("=========================Augment===========================")
-                augment = DataAugment(config, min_epoch)
-                augment.data_augment(dim_in=dim_in,
-                                     dim_condition=dim_condition,
-                                     dim_hidden=dim_hidden,
-                                     model_type=ada_model.type,
-                                     ways=diffusion_dataset.ways,
-                                     time=time,
-                                     dataset='TEP',
-                                     guided_fn=None)
-                print("=========================Augment done===========================")
-
-                print("=========================Classification===========================")
-                classification = TrainClassification(config,
-                                                     ways=diffusion_dataset.ways)
-                result = classification.train_loop(time, data_set=diffusion_dataset)
-                if min_augment_accuracy > result[1][1]:
-                    min_augment_accuracy = result[1][1]
-                    min_augment_ways = diffusion_dataset.ways
-                    min_augment_time = time
-                if min_source_accuracy > result[0][1]:
-                    min_source_accuracy = result[0][1]
-                    min_source_ways = diffusion_dataset.ways
-                    min_source_time = time
-
-                total_augment_accuracy += result[1][1]
-                total_source_accuracy += result[0][1]
-                print("=========================Classification done===========================")
+            total_augment_accuracy += result[1][1]
+            total_source_accuracy += result[0][1]
+            print("=========================Classification done===========================")
 
         average_augment_accuracy = total_augment_accuracy / test_times
         average_source_accuracy = total_source_accuracy / test_times
@@ -286,8 +345,8 @@ if __name__ == '__main__':
         print(f"min_augment_accuracy: {min_augment_accuracy}")
         print(f"min_augment_ways: {min_augment_ways}")
 
-        if condition_func is not None:
-            test_logger.info("Guided diffusion...")
+        # # if condition_func is not None:
+        # #     test_logger.info("Guided diffusion...")
         test_logger.info(f"------------------Average Result------------------")
         test_logger.info(f"shots_num: {config.shots_num}")
         test_logger.info(f"ways_num: {config.ways_num}")

@@ -16,19 +16,22 @@ augment :
 #  pca_root : "..\\processed_data\\test\\pca_augment"
 #  split_standard_pca_root : "..\\processed_data\\test\\split_standard_pca_augment"
 #  standard_pca_root : "..\\processed_data\\test\\standard_pca_augment"
-  augment_data_root : "processed_data\\test\\augment"
+  augment_data_root : "processed_data\\test\\gan_augment"
 diffusion_model :
   root : "experiments\\models\\test"
 classification_model :
   root : "experiments\\classifications\\test"
+gan_model:
+  root : "experiments\\gan\\test"
 log :
   diffusion_root : "experiments\\logs\\test\\diffusion"
   augment_root : "experiments\\logs\\test\\augment"
   classification_root : "experiments\\logs\\test\\classification"
+  gan_root : "experiments\\logs\\test\\gan"
 
 classifier:
 #  classifier_path : "experiments\\models\\classifier\\classifier.pkl"
-  classifier_path : "experiments\\models\\classifier\\Hydraulic_classifier_zscore.pkl"
+  classifier_path : "experiments\\models\\classifier\\classifier_zscore.pkl"
   classifier_scale : 10
 
 # shots num and ways num
@@ -52,9 +55,9 @@ diffusion_parameters :
 # train_parameters
 train_parameters :
   checkpoint_interval : 10
-  epochs : 2000
+  epochs : 10000
   batch_size : 32
-  learning_rate : 1e-3
+  learning_rate : 1e-4
   device : 'cuda'
 
 #augment_num : 20

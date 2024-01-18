@@ -288,6 +288,43 @@ class GuidedClassifier(nn.Module):
         return self.out_layer(x)
 
 
+class Generator(nn.Module):
+    def __init__(self, latent_dim, out_dim, n_class, emb_dim):
+        super(Generator, self).__init__()
+        self.latent_dim = latent_dim
+        self.type = "Generator"
+        self.emb = nn.Embedding(n_class, emb_dim)
+        self.model = nn.Sequential(
+            nn.Linear(latent_dim + emb_dim, int(out_dim / 2)),
+            nn.LeakyReLU(),
+            nn.Linear(int(out_dim / 2), out_dim)
+        )
+
+    def forward(self, z, attribute):
+        # print(attribute.shape)
+        # print(self.emb(attribute).shape)
+        gen_input = torch.cat([z, self.emb(attribute)], dim=-1)
+        return self.model(gen_input)
+
+
+class Discriminator(nn.Module):
+    def __init__(self, feature_dim, n_class, emb_dim):
+        super(Discriminator, self).__init__()
+        self.emb = nn.Embedding(n_class, emb_dim)
+        self.model = nn.Sequential(
+            nn.Linear(feature_dim + emb_dim, int(feature_dim / 2)),
+            nn.ReLU(),
+            nn.Linear(int(feature_dim / 2), int(feature_dim / 4)),
+            nn.ReLU(),
+            nn.Linear(int(feature_dim / 4), 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, attribute):
+        dis_input = torch.cat([x, self.emb(attribute)], dim=-1)
+        return self.model(dis_input)
+
+
 if __name__ == '__main__':
     # model = AttentionModel(64, 4)
     # input = torch.randn(32, 17, 64)
